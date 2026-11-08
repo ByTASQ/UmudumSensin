@@ -150,11 +150,6 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
 
   const filteredResults = useMemo(() => {
     return activeResults.filter((res) => {
-      // Süresi dolan, 404 veren veya boş arama formu/genel sayfa olanları kesinlikle filtrele
-      if (!isJobActive(res.job)) return false;
-      if (isJobLinkBroken(res.job)) return false;
-      if (!isSpecificJobUrl(res.job.originalUrl)) return false;
-
       // KULLANICI KURALI: Memurlar.net kesinlikle uygun ilanlar veya kamu/özel listesinde olamaz!
       // SADECE "Haberler" sekmesinde görünebilir!
       if (statusFilter !== 'news' && isNewsJob(res.job)) {
