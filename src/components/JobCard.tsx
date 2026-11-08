@@ -3,7 +3,6 @@ import { MatchResult } from '../types/job';
 import { ExternalLink, Bookmark, BookmarkCheck } from 'lucide-react';
 import { getSafeJobUrl } from '../utils/navigation';
 
-interface JobCardProps {
 interface CachedJobCardFields {
   cityLower: string;
   titleLower: string;
@@ -15,6 +14,18 @@ interface CachedJobCardFields {
 }
 
 const JOB_CARD_FIELDS_CACHE = new WeakMap<MatchResult['job'], CachedJobCardFields>();
+
+const SAFE_JOB_URL_CACHE = new WeakMap<MatchResult['job'], string>();
+
+const getCachedSafeJobUrl = (job: MatchResult['job']): string => {
+  const cached = SAFE_JOB_URL_CACHE.get(job);
+  if (cached !== undefined) return cached;
+  const url = getSafeJobUrl(job);
+  SAFE_JOB_URL_CACHE.set(job, url);
+  return url;
+};
+
+
 
 const getCachedJobCardFields = (job: MatchResult['job']): CachedJobCardFields => {
   const cached = JOB_CARD_FIELDS_CACHE.get(job);
@@ -49,7 +60,7 @@ const JobCardComponent: React.FC<JobCardProps> = ({
   onToggleSave
 }) => {
   const { job, matchPercentage } = result;
-  const safeUrl = getSafeJobUrl(job);
+  const safeUrl = getCachedSafeJobUrl(job);
   const { cityLower, titleLower, descLower, companyLower, sourceIdLower, sourceDomainLower, originalUrlLower } = getCachedJobCardFields(job);
 
   // Memurlar.net bir kamu kurumu değil, ilan haberleri yapan bir haber sitesidir.
