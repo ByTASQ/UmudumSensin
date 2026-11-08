@@ -361,7 +361,7 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
     return allMergedResults.filter(r => 
       isJobActive(r.job) && 
       !isJobLinkBroken(r.job) && 
-      isSpecificJobUrl(r.job.originalUrl) &&
+      isJobSpecificUrl(r.job) &&
       isJobCityMatching(r.job)
     );
   }, [allMergedResults, verificationVersion, isCityFilterActive, userCityNorm]);
