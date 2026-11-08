@@ -13,7 +13,7 @@ interface JobCardProps {
   onRecheck?: (url: string) => void;
 }
 
-export const JobCard: React.FC<JobCardProps> = ({
+const JobCardComponent: React.FC<JobCardProps> = ({
   result,
   isSaved = false,
   onToggleSave
@@ -75,6 +75,7 @@ export const JobCard: React.FC<JobCardProps> = ({
   return (
     <article 
       onClick={handleCardClick}
+      style={{ contentVisibility: 'auto', containIntrinsicSize: '0 112px' }}
       className="w-full px-4 sm:px-6 py-3 border-b border-purple-100/70 dark:border-purple-950/40 hover:bg-purple-50/30 dark:hover:bg-purple-950/20 transition-colors cursor-pointer"
     >
       <div className="w-full space-y-1.5 min-w-0">
@@ -168,3 +169,5 @@ export const JobCard: React.FC<JobCardProps> = ({
     </article>
   );
 };
+
+export const JobCard = React.memo(JobCardComponent);
