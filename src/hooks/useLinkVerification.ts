@@ -83,6 +83,8 @@ export function useLinkVerification(jobs: JobPosting[]) {
     let isCancelled = false;
 
     const runBatch = async () => {
+      if (isCancelled) return;
+
       setIsVerifying(true);
       try {
         await verifyBatchLinks(urls, false);
@@ -95,10 +97,29 @@ export function useLinkVerification(jobs: JobPosting[]) {
       }
     };
 
-    runBatch();
+    // Link checks are network-bound but their completion can still trigger
+    // React work. On low-end devices, start them while the browser is idle so
+    // opening/filtering the results screen gets priority.
+    let idleHandle: number | ReturnType<typeof setTimeout>;
+    const scheduleIdle = () => {
+      if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+        idleHandle = (window as Window & {
+          requestIdleCallback: (callback: () => void, options?: { timeout: number }) => number;
+        }).requestIdleCallback(runBatch, { timeout: 1200 });
+      } else {
+        idleHandle = window.setTimeout(runBatch, 250);
+      }
+    };
+
+    scheduleIdle();
 
     return () => {
       isCancelled = true;
+      if (typeof window !== 'undefined' && 'cancelIdleCallback' in window && typeof idleHandle === 'number') {
+        (window as Window & { cancelIdleCallback: (handle: number) => void }).cancelIdleCallback(idleHandle);
+      } else {
+        window.clearTimeout(idleHandle as number);
+      }
     };
   }, [urls]);
 
