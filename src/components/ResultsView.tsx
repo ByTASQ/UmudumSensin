@@ -485,7 +485,6 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
       if (
         !isJobActive(job) ||
         isJobLinkBroken(job) ||
-        !isJobSpecificUrl(job) ||
         !isJobCityMatching(job)
       ) {
         continue;
