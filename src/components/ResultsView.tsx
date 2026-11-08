@@ -61,19 +61,27 @@ const VirtualJobList: React.FC<VirtualJobListProps> = ({ items, savedJobIdSet, o
     return `${result.job.id}-${result.job.sourceId || ''}`;
   }, []);
   const [viewport, setViewport] = useState({ scrollTop: 0, height: 600 });
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
 
   const rebuildOffsets = useCallback(() => {
-    const offsets = new Array(items.length + 1);
+    const currentItems = itemsRef.current;
+    const offsets = new Array(currentItems.length + 1);
     let total = 0;
 
-    for (let i = 0; i < items.length; i++) {
-      const height = heightCacheRef.current.get(getRowKey(items[i])) || ESTIMATED_CARD_HEIGHT;
+    for (let i = 0; i < currentItems.length; i++) {
+      const height = heightCacheRef.current.get(getRowKey(currentItems[i])) || ESTIMATED_CARD_HEIGHT;
       offsets[i] = total;
       total += height;
     }
-    offsets[items.length] = total;
+    offsets[currentItems.length] = total;
     offsetsRef.current = offsets;
-  }, [items, getRowKey]);
+  }, [getRowKey]);
+
+  const itemKeySignature = useMemo(
+    () => items.map(item => getRowKey(item)).join('\u0001'),
+    [items, getRowKey]
+  );
 
   useEffect(() => {
     rowObserversRef.current.forEach(observer => observer.disconnect());
@@ -106,7 +114,7 @@ const VirtualJobList: React.FC<VirtualJobListProps> = ({ items, savedJobIdSet, o
       el.removeEventListener('scroll', onScroll);
       resizeObserver.disconnect();
     };
-  }, [items, rebuildOffsets]);
+  }, [itemKeySignature, rebuildOffsets]);
 
   const findStartIndex = (scrollTop: number) => {
     const offsets = offsetsRef.current;
@@ -136,7 +144,7 @@ const VirtualJobList: React.FC<VirtualJobListProps> = ({ items, savedJobIdSet, o
 
     const measure = () => {
       const height = node.getBoundingClientRect().height;
-      const result = items[index];
+      const result = itemsRef.current[index];
       if (!result) return;
       const rowKey = getRowKey(result);
       const previous = heightCacheRef.current.get(rowKey) || ESTIMATED_CARD_HEIGHT;
@@ -151,7 +159,7 @@ const VirtualJobList: React.FC<VirtualJobListProps> = ({ items, savedJobIdSet, o
     const observer = new ResizeObserver(measure);
     observer.observe(node);
     rowObserversRef.current.set(index, observer);
-  }, [items, getRowKey, rebuildOffsets]);
+  }, [getRowKey, rebuildOffsets]);
 
   useEffect(() => {
     return () => {
@@ -392,8 +400,13 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
 
   const normalizedSearchQuery = searchQuery.trim().toLocaleLowerCase('tr-TR');
 
+  const sortedActiveResults = useMemo(
+    () => [...activeResults].sort((a, b) => b.matchPercentage - a.matchPercentage),
+    [activeResults]
+  );
+
   const filteredResults = useMemo(() => {
-    return activeResults.filter((res) => {
+    return sortedActiveResults.filter((res) => {
       // KULLANICI KURALI: Memurlar.net kesinlikle uygun ilanlar veya kamu/özel listesinde olamaz!
       // SADECE "Haberler" sekmesinde görünebilir!
       const isNews = newsJobs.has(res.job);
@@ -438,7 +451,7 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
 
       return true;
     }).sort((a, b) => b.matchPercentage - a.matchPercentage);
-  }, [activeResults, statusFilter, sourceFilter, normalizedSearchQuery, savedJobIdSet]);
+  }, [sortedActiveResults, statusFilter, sourceFilter, normalizedSearchQuery, savedJobIdSet]);
 
   // Sector display text
   const sectorSummary = criteria.includePublic && criteria.includePrivate
