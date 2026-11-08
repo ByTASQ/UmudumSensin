@@ -227,12 +227,13 @@ export async function verifyBatchLinks(
           memoryCache.set(item.url, item);
           batchUpdatedItems.push(item);
         }
+        scheduleCacheSave();
       }
     }
 
     // Batch sonunda bekleyen değişiklikleri tek yazımda kalıcılaştır.
     flushCacheToStorage();
-    for (const item of Object.values(dataResultsFromBatch(memoryCache, toFetch))) {
+    for (const item of batchUpdatedItems) {
       notifyListeners(item.url, item);
     }
   } catch (err) {
@@ -252,18 +253,6 @@ export async function verifyBatchLinks(
 }
 
 
-
-function dataResultsFromBatch(
-  cache: Map<string, LinkVerificationResult>,
-  urls: string[]
-): Record<string, LinkVerificationResult> {
-  const changed: Record<string, LinkVerificationResult> = {};
-  for (const url of urls) {
-    const item = cache.get(url);
-    if (item) changed[url] = item;
-  }
-  return changed;
-}
 
 /**
  * Cache'deki tüm sonuçları döndürür.
