@@ -47,6 +47,11 @@ interface EvaluationContext {
 
 const EVALUATION_CONTEXT_CACHE = new WeakMap<UserCriteria, EvaluationContext>();
 
+// A criteria object is reused while the results list is re-rendered.
+// Cache the complete per-job evaluation to avoid rebuilding checks/reasons
+// when the same job is evaluated again for the same immutable criteria.
+const MATCH_RESULT_CACHE = new WeakMap<UserCriteria, WeakMap<JobPosting, MatchResult>>();
+
 const JOB_FIELDS_CACHE = new WeakMap<JobPosting, NormalizedJobFields>();
 
 const ELECTRONICS_KEYWORDS = ['elektronik', 'elektrik', 'mekatronik', 'otomasyon', 'haberlesme'];
@@ -443,6 +448,15 @@ export function checkProfessionMatch(
 }
 
 export function evaluateJobMatch(job: JobPosting, criteria: UserCriteria): MatchResult {
+  let criteriaCache = MATCH_RESULT_CACHE.get(criteria);
+  if (!criteriaCache) {
+    criteriaCache = new WeakMap<JobPosting, MatchResult>();
+    MATCH_RESULT_CACHE.set(criteria, criteriaCache);
+  }
+
+  const cachedResult = criteriaCache.get(job);
+  if (cachedResult) return cachedResult;
+
   const checks: RequirementCheck[] = [];
   let score = 0;
   let hasCriticalFailure = false;
@@ -844,7 +858,7 @@ export function evaluateJobMatch(job: JobPosting, criteria: UserCriteria): Match
     ? 'Kriterlerin önemli bir kısmı karşılansa da bölgesel veya bölüm denkliği koşulları bulunmaktadır.'
     : primaryFailureReason || 'İlanın zorunlu şartları karşılanmıyor.';
 
-  return {
+  const result: MatchResult = {
     job,
     status,
     matchPercentage,
@@ -852,4 +866,7 @@ export function evaluateJobMatch(job: JobPosting, criteria: UserCriteria): Match
     ineligibilityReason: hasCriticalFailure ? primaryFailureReason : undefined,
     summaryNote
   };
+
+  criteriaCache.set(job, result);
+  return result;
 }
