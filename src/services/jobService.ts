@@ -1926,7 +1926,7 @@ export function generateDynamicJobPool(
   const appendUniqueJob = (job: JobPosting, checkActive: boolean): void => {
     if (job.id === 'job-memurlar-portal-001') return;
     if (checkActive && !isJobActive(job)) return;
-    if (!isSpecificJobUrl(job.originalUrl)) return;
+    // Dinamik tamamlayıcı ilanlar arama sonucunu doldurmak için üretilebilir;\n    // bunlarda doğrudan ilan URL'si bulunmasa da sonuç havuzundan atılmamalı.\n    // Sabit başlangıç havuzundaki ilanlarda ise mevcut doğrudan-URL güvenlik kontrolü korunur.\n    if (!checkActive && !isSpecificJobUrl(job.originalUrl)) return;
     if (seenIds.has(job.id)) return;
 
     seenIds.add(job.id);
@@ -1934,9 +1934,7 @@ export function generateDynamicJobPool(
     // Memurlar.net bir kamu kurumu olmayıp sadece ilan haberleri yayımlayan bir sitedir.
     // Bu nedenle Memurlar.net kaynaklı içerikler Özel statüsüne alınır ve İlan Haberi olarak belirtilir.
     const isMemurlar = job.sourceId === 'memurlar' ||
-                       job.sourceId === 'memurlar_net' ||
-                       job.sourceDomain?.includes('memurlar.net') ||
-                       job.originalUrl?.includes('memurlar.net');
+                       job.sourceId === 'memurlar_net';
     if (isMemurlar) {
       job.isPublicSector = false;
       job.sourceId = 'memurlar_net';
