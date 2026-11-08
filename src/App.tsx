@@ -109,20 +109,20 @@ export default function App() {
       enabledSourceIds.add('ilan_gov_tr');
     }
     
-    // Filter jobs by enabled sources, ensure ONLY active jobs, and ensure ONLY targeted job announcements
-    let eligiblePool = dynamicPool
-      .filter(j => enabledSourceIds.has(j.sourceId))
-      .filter(j => isJobActive(j))
-      .filter(j => isTargetedJobUrl(resolveSafeJobUrl(j)));
-
     const includePublic = targetCriteria.includePublic ?? (targetCriteria.onlyPublicJobs !== false);
     const includePrivate = targetCriteria.includePrivate ?? (!targetCriteria.onlyPublicJobs);
 
-    // Filter jobs by selected sectors (Kamu vs Özel Sektör)
-    if (includePublic && !includePrivate) {
-      eligiblePool = eligiblePool.filter(j => j.isPublicSector);
-    } else if (!includePublic && includePrivate) {
-      eligiblePool = eligiblePool.filter(j => !j.isPublicSector);
+    // Filter and sector-check in one pass to avoid multiple full-array scans.
+    const eligiblePool: JobPosting[] = [];
+    for (const job of dynamicPool) {
+      if (!enabledSourceIds.has(job.sourceId) || !isJobActive(job)) continue;
+      if (!isTargetedJobUrl(resolveSafeJobUrl(job))) continue;
+      if (includePublic && !includePrivate) {
+        if (!job.isPublicSector) continue;
+      } else if (!includePublic && includePrivate) {
+        if (job.isPublicSector) continue;
+      }
+      eligiblePool.push(job);
     }
 
     // Evaluate each job
