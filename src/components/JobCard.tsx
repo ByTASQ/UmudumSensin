@@ -4,6 +4,36 @@ import { ExternalLink, Bookmark, BookmarkCheck } from 'lucide-react';
 import { getSafeJobUrl } from '../utils/navigation';
 
 interface JobCardProps {
+interface CachedJobCardFields {
+  cityLower: string;
+  titleLower: string;
+  descLower: string;
+  companyLower: string;
+  sourceIdLower: string;
+  sourceDomainLower: string;
+  originalUrlLower: string;
+}
+
+const JOB_CARD_FIELDS_CACHE = new WeakMap<MatchResult['job'], CachedJobCardFields>();
+
+const getCachedJobCardFields = (job: MatchResult['job']): CachedJobCardFields => {
+  const cached = JOB_CARD_FIELDS_CACHE.get(job);
+  if (cached) return cached;
+
+  const fields: CachedJobCardFields = {
+    cityLower: (job.city || '').toLocaleLowerCase('tr-TR'),
+    titleLower: (job.title || '').toLocaleLowerCase('tr-TR'),
+    descLower: (job.description || '').toLocaleLowerCase('tr-TR'),
+    companyLower: (job.company || '').toLocaleLowerCase('tr-TR'),
+    sourceIdLower: (job.sourceId || '').toLocaleLowerCase('tr-TR'),
+    sourceDomainLower: (job.sourceDomain || '').toLocaleLowerCase('tr-TR'),
+    originalUrlLower: (job.originalUrl || '').toLocaleLowerCase('tr-TR')
+  };
+
+  JOB_CARD_FIELDS_CACHE.set(job, fields);
+  return fields;
+};
+
   result: MatchResult;
   isSelected?: boolean;
   isSaved?: boolean;
@@ -20,18 +50,17 @@ const JobCardComponent: React.FC<JobCardProps> = ({
 }) => {
   const { job, matchPercentage } = result;
   const safeUrl = getSafeJobUrl(job);
+  const { cityLower, titleLower, descLower, companyLower, sourceIdLower, sourceDomainLower, originalUrlLower } = getCachedJobCardFields(job);
 
   // Memurlar.net bir kamu kurumu değil, ilan haberleri yapan bir haber sitesidir.
-  const isMemurlarNews = job.sourceId === 'memurlar_net' || 
-                         job.sourceId === 'memurlar' || 
-                         job.sourceDomain?.includes('memurlar.net') || 
-                         job.originalUrl?.includes('memurlar.net');
+  const isMemurlarNews =
+    sourceIdLower === 'memurlar_net' ||
+    sourceIdLower === 'memurlar' ||
+    sourceDomainLower.includes('memurlar.net') ||
+    originalUrlLower.includes('memurlar.net');
 
   // Konum: Eğer ilan tüm iller / tüm Türkiye şeklinde girilmişse,
   // kullanıcının aradığı il (örn: Aydın) yerine "Tüm İller" olarak gösterilir.
-  const cityLower = (job.city || '').toLocaleLowerCase('tr-TR');
-  const titleLower = (job.title || '').toLocaleLowerCase('tr-TR');
-  const descLower = (job.description || '').toLocaleLowerCase('tr-TR');
 
   const isNationwide = job.isNationwide === true || 
                        cityLower.includes('tüm') || 
@@ -60,10 +89,10 @@ const JobCardComponent: React.FC<JobCardProps> = ({
   const deadlineText = job.deadlineDate || 'Belirtilmemiş';
 
   // Şirket / Kurum metni
-  const isTitleRedundant = job.title && (
-    job.title.toLowerCase().includes(job.company.toLowerCase()) || 
-    job.company.toLowerCase().includes(job.title.toLowerCase())
-  );
+  const isTitleRedundant = Boolean(job.title && (
+    titleLower.includes(companyLower) ||
+    companyLower.includes(titleLower)
+  ));
   const companyDisplayText = !isTitleRedundant && job.title
     ? `${job.company} · ${job.title}`
     : job.company || job.title || 'Belirtilmemiş Kurum';
