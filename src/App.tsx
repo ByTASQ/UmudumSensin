@@ -221,7 +221,35 @@ export default function App() {
     saveViewMode(nextMode);
   };
 
-  const activeSourcesCount = sources.filter(s => s.enabled).length;
+  const { activeSourcesCount, eligibleResultsCount, publicEligibleResultsCount } = useMemo(() => {
+    let activeSourcesCount = 0;
+    let eligibleResultsCount = 0;
+    let publicEligibleResultsCount = 0;
+
+    for (const source of sources) {
+      if (source.enabled) activeSourcesCount++;
+    }
+
+    for (const result of matchResults) {
+      if (result.status !== 'eligible') continue;
+      eligibleResultsCount++;
+      const sourceId = result.job.sourceId;
+      const domain = result.job.sourceDomain || '';
+      if (
+        sourceId !== 'memurlar_net' &&
+        sourceId !== 'memurlar' &&
+        !domain.includes('memurlar.net')
+      ) {
+        publicEligibleResultsCount++;
+      }
+    }
+
+    return {
+      activeSourcesCount,
+      eligibleResultsCount,
+      publicEligibleResultsCount
+    };
+  }, [sources, matchResults]);
 
   return (
     <AndroidFrame 
@@ -236,7 +264,7 @@ export default function App() {
         isDarkMode={isDarkMode}
         currentTab={currentTab}
         onTabChange={(tab) => setCurrentTab(tab)}
-        resultsCount={matchResults.filter(r => r.status === 'eligible').length}
+        resultsCount={eligibleResultsCount}
         onToggleDarkMode={handleToggleTheme}
         includePublic={criteria.includePublic ?? (criteria.onlyPublicJobs !== false)}
         includePrivate={criteria.includePrivate ?? (!criteria.onlyPublicJobs)}
@@ -294,7 +322,7 @@ export default function App() {
       <BottomNav
         currentTab={currentTab}
         onTabChange={(tab) => setCurrentTab(tab)}
-        resultsCount={matchResults.filter(r => r.status === 'eligible' && r.job.sourceId !== 'memurlar_net' && r.job.sourceId !== 'memurlar' && !r.job.sourceDomain?.includes('memurlar.net')).length}
+        resultsCount={publicEligibleResultsCount}
       />
 
       {/* Scanning Modal with realistic 5-step animation */}
