@@ -10,6 +10,8 @@ export interface LinkVerificationResult {
   message: string;
 }
 
+import { apiUrl } from './apiConfig';
+
 const STORAGE_CACHE_KEY = 'is_ilani_url_verification_cache_v3';
 const CACHE_MAX_AGE_MS = 10 * 60 * 1000; // 10 minutes
 
@@ -144,7 +146,7 @@ export async function verifySingleLink(
 
   const promise = (async () => {
     try {
-      const res = await fetch(`/api/verify-url?url=${encodeURIComponent(url)}`, {
+      const res = await fetch(apiUrl(`/api/verify-url?url=${encodeURIComponent(url)}`), {
         signal: AbortSignal.timeout(6000)
       });
       if (!res.ok) {
@@ -222,7 +224,7 @@ export async function verifyBatchLinks(
     const batchUpdatedItems: LinkVerificationResult[] = [];
 
     for (const chunk of chunks) {
-      const response = await fetch('/api/verify-urls', {
+      const response = await fetch(apiUrl('/api/verify-urls'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ urls: chunk }),
