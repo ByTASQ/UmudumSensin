@@ -22,6 +22,8 @@ interface NormalizedJobFields {
   allowedDepartments: string[];
   requiredEducation: string[];
   description: string;
+  isElectronics: boolean;
+  isCs: boolean;
 }
 
 interface EvaluationContext {
@@ -75,12 +77,21 @@ function getNormalizedJobFields(job: JobPosting): NormalizedJobFields {
   const cached = JOB_FIELDS_CACHE.get(job);
   if (cached) return cached;
 
+  const allowedDepartments = (job.allowedDepartments || []).map(normalizeTurkish);
   const fields: NormalizedJobFields = {
     city: normalizeTurkish(job.city),
     title: normalizeTurkish(job.title),
-    allowedDepartments: (job.allowedDepartments || []).map(normalizeTurkish),
+    allowedDepartments,
     requiredEducation: (job.requiredEducation || []).map(normalizeTurkish),
-    description: normalizeTurkish(job.description)
+    description: normalizeTurkish(job.description),
+    isElectronics: allowedDepartments.some(allowedNorm =>
+      ELECTRONICS_KEYWORDS.some(k => allowedNorm.includes(k))
+    ),
+    isCs: allowedDepartments.some(allowedNorm => {
+      const jobTokens = allowedNorm.split(/[s,/-]+/);
+      return CS_KEYWORDS.some(k => allowedNorm.includes(k)) ||
+             jobTokens.some(t => t === 'it' || t === 'bt');
+    })
   };
   JOB_FIELDS_CACHE.set(job, fields);
   return fields;
@@ -162,13 +173,10 @@ export function isEngineerJob(title?: string, allowedDepartments?: string[]): bo
  * 6. Tekniker Unvanı:
  *    Tekniker unvanı 2 yıllık Meslek Yüksekokulu (Önlisans) gerektirir; lise mezunları Teknisyen olabilir, Tekniker olamaz.
  */
-export function checkEducationTitleLegality(
-  jobTitle: string,
-  userEduLevel?: string
+function checkEducationTitleLegalityNormalized(
+  normTitle: string,
+  userEduNorm: string
 ): { isLegal: boolean; reason?: string } {
-  if (!userEduLevel || userEduLevel === 'Fark Etmez') return { isLegal: true };
-  const userEduNorm = normalizeTurkish(userEduLevel);
-  const normTitle = normalizeTurkish(jobTitle);
 
   const isUserUndergradOrBelow = 
     userEduNorm.includes('onlisans') || 
@@ -236,6 +244,17 @@ export function checkEducationTitleLegality(
   }
 
   return { isLegal: true };
+}
+
+export function checkEducationTitleLegality(
+  jobTitle: string,
+  userEduLevel?: string
+): { isLegal: boolean; reason?: string } {
+  if (!userEduLevel || userEduLevel === 'Fark Etmez') return { isLegal: true };
+  return checkEducationTitleLegalityNormalized(
+    normalizeTurkish(jobTitle),
+    normalizeTurkish(userEduLevel)
+  );
 }
 
 /**
@@ -513,7 +532,7 @@ export function evaluateJobMatch(job: JobPosting, criteria: UserCriteria): Match
   // 2. MEZUNİYET SEVİYESİ VE MÜHENDİSLİK UNVAN YASALLIK KONTROLÜ
   // 3458 sayılı Mühendislik ve Mimarlık Kanunu uyarınca:
   // 2 yıllık önlisans mezunları mühendis unvanına sahip olamaz ve mühendis kadrolarına başvuramaz.
-  const titleLegality = checkEducationTitleLegality(job.title, criteria.educationLevel);
+  const titleLegality = checkEducationTitleLegalityNormalized(jobFields.title, userEduNorm);
   if (!titleLegality.isLegal) {
     hasCriticalFailure = true;
     if (!primaryFailureReason) primaryFailureReason = titleLegality.reason!;
@@ -582,14 +601,8 @@ export function evaluateJobMatch(job: JobPosting, criteria: UserCriteria): Match
       reason: 'Bölüm filtresi seçilmedi'
     });
   } else {
-    const isJobElectronics = jobFields.allowedDepartments.some(allowedNorm =>
-      ELECTRONICS_KEYWORDS.some(k => allowedNorm.includes(k))
-    );
-    const isJobCs = jobFields.allowedDepartments.some(allowedNorm => {
-      const jobTokens = allowedNorm.split(/[\s,/-]+/);
-      return CS_KEYWORDS.some(k => allowedNorm.includes(k)) ||
-             jobTokens.some(t => t === 'it' || t === 'bt');
-    });
+    const isJobElectronics = jobFields.isElectronics;
+    const isJobCs = jobFields.isCs;
 
     for (const allowedNorm of jobFields.allowedDepartments) {
       if (allowedNorm.includes('alan ayrımı olmaksızın') || allowedNorm.includes('fark etmez') || allowedNorm.includes('tum bolumler') || allowedNorm.includes('ilgili bolum')) {
