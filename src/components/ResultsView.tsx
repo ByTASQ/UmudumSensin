@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { MatchResult, UserCriteria, JobSource, JobPosting } from '../types/job';
 import { JobCard } from './JobCard';
 import { evaluateJobMatch, normalizeTurkish } from '../services/matcher';
@@ -19,6 +19,147 @@ import { isJobActive } from '../utils/dateUtils';
 import { isSpecificJobUrl } from '../services/preciseSearchService';
 
 const JOB_CITY_NORMALIZED_CACHE = new WeakMap<JobPosting, string>();
+
+interface VirtualJobListProps {
+  items: MatchResult[];
+  savedJobIdSet: Set<string>;
+  onToggleSave: (jobId: string) => void;
+}
+
+const ESTIMATED_CARD_HEIGHT = 112;
+const VIRTUAL_OVERSCAN = 6;
+
+const VirtualJobList: React.FC<VirtualJobListProps> = ({ items, savedJobIdSet, onToggleSave }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const heightsRef = useRef<number[]>([]);
+  const offsetsRef = useRef<number[]>([]);
+  const [viewport, setViewport] = useState({ scrollTop: 0, height: 600 });
+
+  const rebuildOffsets = useCallback(() => {
+    const offsets = new Array(items.length + 1);
+    const heights = heightsRef.current;
+    let total = 0;
+
+    for (let i = 0; i < items.length; i++) {
+      offsets[i] = total;
+      total += heights[i] || ESTIMATED_CARD_HEIGHT;
+    }
+    offsets[items.length] = total;
+    offsetsRef.current = offsets;
+  }, [items.length]);
+
+  useEffect(() => {
+    heightsRef.current = heightsRef.current.slice(0, items.length);
+    rebuildOffsets();
+
+    const el = containerRef.current;
+    if (!el) return;
+
+    const updateViewport = () => {
+      setViewport({
+        scrollTop: el.scrollTop,
+        height: el.clientHeight || 600
+      });
+    };
+
+    updateViewport();
+    let frame = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(updateViewport);
+    };
+
+    el.addEventListener('scroll', onScroll, { passive: true });
+    const resizeObserver = new ResizeObserver(updateViewport);
+    resizeObserver.observe(el);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      el.removeEventListener('scroll', onScroll);
+      resizeObserver.disconnect();
+    };
+  }, [items.length, rebuildOffsets]);
+
+  const findStartIndex = (scrollTop: number) => {
+    const offsets = offsetsRef.current;
+    let low = 0;
+    let high = Math.max(0, offsets.length - 2);
+
+    while (low < high) {
+      const mid = Math.floor((low + high) / 2);
+      if (offsets[mid + 1] < scrollTop) low = mid + 1;
+      else high = mid;
+    }
+    return low;
+  };
+
+  const startIndex = Math.max(0, findStartIndex(Math.max(0, viewport.scrollTop)) - VIRTUAL_OVERSCAN);
+  const endIndex = Math.min(
+    items.length,
+    findStartIndex(viewport.scrollTop + viewport.height) + VIRTUAL_OVERSCAN + 1
+  );
+
+  const measureRow = useCallback((index: number, node: HTMLDivElement | null) => {
+    if (!node) return;
+
+    const measure = () => {
+      const height = node.getBoundingClientRect().height;
+      const previous = heightsRef.current[index] || ESTIMATED_CARD_HEIGHT;
+      if (Math.abs(previous - height) < 1) return;
+
+      heightsRef.current[index] = height;
+      rebuildOffsets();
+      setViewport(current => ({ ...current }));
+    };
+
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    (node as HTMLDivElement & { __virtualObserver?: ResizeObserver }).__virtualObserver = observer;
+  }, [rebuildOffsets]);
+
+  useEffect(() => {
+    return () => {
+      document.querySelectorAll('[data-virtual-job-row]').forEach(node => {
+        const observer = (node as HTMLDivElement & { __virtualObserver?: ResizeObserver }).__virtualObserver;
+        observer?.disconnect();
+      });
+    };
+  }, []);
+
+  const totalHeight = offsetsRef.current[items.length] || items.length * ESTIMATED_CARD_HEIGHT;
+
+  return (
+    <div ref={containerRef} className="flex-1 overflow-y-auto">
+      <div style={{ height: totalHeight, position: 'relative' }}>
+        {items.slice(startIndex, endIndex).map((result, relativeIndex) => {
+          const index = startIndex + relativeIndex;
+          const top = offsetsRef.current[index] ?? index * ESTIMATED_CARD_HEIGHT;
+
+          return (
+            <div
+              key={`${result.job.id}-${result.job.sourceId || index}`}
+              data-virtual-job-row
+              ref={node => measureRow(index, node)}
+              style={{
+                position: 'absolute',
+                top,
+                left: 0,
+                right: 0
+              }}
+            >
+              <JobCard
+                result={result}
+                isSaved={savedJobIdSet.has(result.job.id)}
+                onToggleSave={onToggleSave}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
 
 interface ResultsViewProps {
   results: MatchResult[];
@@ -250,20 +391,6 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
       return true;
     }).sort((a, b) => b.matchPercentage - a.matchPercentage);
   }, [activeResults, statusFilter, sourceFilter, normalizedSearchQuery, savedJobIdSet]);
-
-  // Kart JSX'lerini yalnızca sonuç listesi gerçekten değiştiğinde yeniden oluştur.
-  // Özellikle link doğrulama state'i değiştiğinde gereksiz yüzlerce React elementinin
-  // tekrar oluşturulmasını engeller.
-  const jobCards = useMemo(() => {
-    return filteredResults.map((result, idx) => (
-      <JobCard
-        key={`${result.job.id}-${result.job.sourceId || idx}`}
-        result={result}
-        isSaved={savedJobIdSet.has(result.job.id)}
-        onToggleSave={onToggleSave}
-      />
-    ));
-  }, [filteredResults, savedJobIdSet, onToggleSave]);
 
   // Sector display text
   const sectorSummary = criteria.includePublic && criteria.includePrivate
@@ -544,9 +671,11 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
             </div>
           </div>
         ) : (
-          <div className="divide-y divide-purple-100/70 dark:divide-purple-950/40">
-            {jobCards}
-          </div>
+          <VirtualJobList
+            items={filteredResults}
+            savedJobIdSet={savedJobIdSet}
+            onToggleSave={onToggleSave}
+          />
         )}
       </div>
 
