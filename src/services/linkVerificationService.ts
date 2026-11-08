@@ -182,6 +182,8 @@ export async function verifyBatchLinks(
       chunks.push(toFetch.slice(i, i + 25));
     }
 
+    const batchUpdatedItems: LinkVerificationResult[] = [];
+
     for (const chunk of chunks) {
       const response = await fetch('/api/verify-urls', {
         method: 'POST',
@@ -200,6 +202,7 @@ export async function verifyBatchLinks(
       if (Array.isArray(data.results)) {
         for (const item of data.results) {
           memoryCache.set(item.url, item);
+          batchUpdatedItems.push(item);
         }
       }
     }
