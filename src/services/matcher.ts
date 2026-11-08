@@ -21,7 +21,29 @@ interface NormalizedJobFields {
   title: string;
   allowedDepartments: string[];
   requiredEducation: string[];
+  description: string;
 }
+
+interface EvaluationContext {
+  userAge: number;
+  userCityNorm: string;
+  userDeptNorm: string;
+  userEduNorm: string;
+  userProfNorm: string;
+  userDeptAndProfTokens: string[];
+  isUserElectronics: boolean;
+  isUserCs: boolean;
+  isEducationFlexible: boolean;
+  userIsLise: boolean;
+  userIsOnlisans: boolean;
+  userIsLisans: boolean;
+  userIsYuksek: boolean;
+  isAllCities: boolean;
+  isNoKpssChecked: boolean;
+  userKpss: number | null;
+}
+
+const EVALUATION_CONTEXT_CACHE = new WeakMap<UserCriteria, EvaluationContext>();
 
 const JOB_FIELDS_CACHE = new WeakMap<JobPosting, NormalizedJobFields>();
 
@@ -57,7 +79,8 @@ function getNormalizedJobFields(job: JobPosting): NormalizedJobFields {
     city: normalizeTurkish(job.city),
     title: normalizeTurkish(job.title),
     allowedDepartments: (job.allowedDepartments || []).map(normalizeTurkish),
-    requiredEducation: (job.requiredEducation || []).map(normalizeTurkish)
+    requiredEducation: (job.requiredEducation || []).map(normalizeTurkish),
+    description: normalizeTurkish(job.description)
   };
   JOB_FIELDS_CACHE.set(job, fields);
   return fields;
@@ -406,13 +429,46 @@ export function evaluateJobMatch(job: JobPosting, criteria: UserCriteria): Match
   let hasCriticalFailure = false;
   let primaryFailureReason = '';
 
-  const userAge = typeof criteria.age === 'number' ? criteria.age : parseInt(String(criteria.age), 10) || 0;
-  const userCityNorm = normalizeTurkish(criteria.city);
+  let evaluationContext = EVALUATION_CONTEXT_CACHE.get(criteria);
+  if (!evaluationContext) {
+    const userAge = typeof criteria.age === 'number' ? criteria.age : parseInt(String(criteria.age), 10) || 0;
+    const userCityNorm = normalizeTurkish(criteria.city);
+    const userDeptNorm = normalizeTurkish(criteria.department);
+    const userEduNorm = normalizeTurkish(criteria.educationLevel);
+    const userProfNorm = normalizeTurkish(criteria.profession);
+    const userDeptAndProfTokens = (userDeptNorm + ' ' + userProfNorm).split(/[\s,/-]+/).filter(Boolean);
+    const isUserElectronics = ELECTRONICS_KEYWORDS.some(k => userDeptNorm.includes(k));
+    const isUserCs = CS_KEYWORDS.some(k => userDeptNorm.includes(k) || userProfNorm.includes(k)) ||
+                     userDeptAndProfTokens.some(t => t === 'it' || t === 'bt');
+    const isEducationFlexible = !criteria.educationLevel || criteria.educationLevel === 'Fark Etmez';
+    const isAllCities = !criteria.city || criteria.city === 'Tüm İller (Türkiye Geneli)' ||
+                        criteria.city === 'Tüm İller' || userCityNorm.includes('tum') || userCityNorm.includes('genel');
+    const isNoKpssChecked = Boolean(criteria.noKpss);
+    const userKpss = typeof criteria.kpssScore === 'number'
+      ? criteria.kpssScore
+      : (criteria.kpssScore !== '' && criteria.kpssScore !== undefined && !isNaN(parseFloat(String(criteria.kpssScore))))
+      ? parseFloat(String(criteria.kpssScore)) : null;
+    evaluationContext = {
+      userAge, userCityNorm, userDeptNorm, userEduNorm, userProfNorm,
+      userDeptAndProfTokens, isUserElectronics, isUserCs, isEducationFlexible,
+      userIsLise: userEduNorm.includes('lise') || userEduNorm.includes('ortaogretim'),
+      userIsOnlisans: userEduNorm.includes('onlisans'),
+      userIsLisans: !userEduNorm.includes('onlisans') && userEduNorm.includes('lisans'),
+      userIsYuksek: userEduNorm.includes('yuksek') || userEduNorm.includes('doktora') || userEduNorm.includes('master'),
+      isAllCities, isNoKpssChecked, userKpss
+    };
+    EVALUATION_CONTEXT_CACHE.set(criteria, evaluationContext);
+  }
+
+  const {
+    userAge, userCityNorm, userDeptNorm, userEduNorm, userProfNorm,
+    userDeptAndProfTokens, isUserElectronics, isUserCs, isEducationFlexible,
+    userIsLise, userIsOnlisans, userIsLisans, userIsYuksek, isAllCities,
+    isNoKpssChecked, userKpss
+  } = evaluationContext;
+
   const jobFields = getNormalizedJobFields(job);
   const jobCityNorm = jobFields.city;
-  const userDeptNorm = normalizeTurkish(criteria.department);
-  const userEduNorm = normalizeTurkish(criteria.educationLevel);
-  const userProfNorm = normalizeTurkish(criteria.profession);
 
   // 1. YAŞ ŞARTI (AGE CHECK)
   if (userAge > 0) {
@@ -531,11 +587,6 @@ export function evaluateJobMatch(job: JobPosting, criteria: UserCriteria): Match
       reason: 'Bölüm filtresi seçilmedi'
     });
   } else {
-    const userDeptAndProfTokens = (userDeptNorm + ' ' + userProfNorm).split(/[\s,/-]+/).filter(Boolean);
-    const isUserElectronics = ELECTRONICS_KEYWORDS.some(k => userDeptNorm.includes(k));
-    const isUserCs = CS_KEYWORDS.some(k => userDeptNorm.includes(k) || userProfNorm.includes(k)) ||
-                     userDeptAndProfTokens.some(t => t === 'it' || t === 'bt');
-
     for (const allowedNorm of jobFields.allowedDepartments) {
       if (allowedNorm.includes('alan ayrımı olmaksızın') || allowedNorm.includes('fark etmez') || allowedNorm.includes('tum bolumler') || allowedNorm.includes('ilgili bolum')) {
         deptMatch = true;
@@ -719,9 +770,9 @@ export function evaluateJobMatch(job: JobPosting, criteria: UserCriteria): Match
   if (criteria.profession && criteria.profession.trim()) {
     const profMatch = checkProfessionMatch(
       criteria.profession,
-      job.title,
-      job.allowedDepartments,
-      job.description
+      jobFields.title,
+      jobFields.allowedDepartments,
+      jobFields.description
     );
 
     if (profMatch.isMatch) {
