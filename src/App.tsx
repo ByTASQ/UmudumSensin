@@ -65,11 +65,21 @@ export default function App() {
     saveThemeMode(next);
   };
 
-  // Sync criteria to local storage
+  // Sync criteria to local storage.
+  // Matching is debounced because ScanForm can emit multiple changes while
+  // the user is typing/selecting filters. This prevents expensive pool
+  // generation and job evaluation on every intermediate keystroke.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      executeMatch(criteria);
+    }, 250);
+
+    return () => window.clearTimeout(timer);
+  }, [criteria, sources]);
+
   const handleCriteriaChange = (newCriteria: UserCriteria) => {
     setCriteria(newCriteria);
     saveLastCriteria(newCriteria);
-    executeMatch(newCriteria);
   };
 
   // Perform the match analysis
@@ -146,10 +156,9 @@ export default function App() {
     handleCriteriaChange(nextCriteria);
   };
 
-  // Initial calculation
-  useEffect(() => {
-    executeMatch(criteria);
-  }, [sources, allJobs]);
+  // Matching is handled by the debounced criteria/source effect above.
+  // allJobs is local cached data and is not needed as a trigger because the
+  // current matching pool is generated from the active criteria and sources.
 
   const handleStartScan = () => {
     setIsScanning(true);
