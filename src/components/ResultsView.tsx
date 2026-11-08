@@ -134,15 +134,19 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
     return isMemurlar || isPureInformational;
   };
 
+  const savedJobIdSet = useMemo(() => new Set(savedJobIds), [savedJobIds]);
+
   // Calculate counts for categories (yalnızca aktif ve şartlara uygun ilanlar üzerinden)
   // KULLANICI KURALI: Sadece şartlara uygun ve aktif ilanlar listelenir!
   const eligibleCount = activeResults.filter(r => r.status === 'eligible' && !isNewsJob(r.job)).length;
-  const savedCount = activeResults.filter(r => savedJobIds.includes(r.job.id) && !isNewsJob(r.job)).length;
+  const savedCount = activeResults.filter(r => savedJobIdSet.has(r.job.id) && !isNewsJob(r.job)).length;
   const newsCount = activeResults.filter(r => isNewsJob(r.job)).length;
   const publicCount = activeResults.filter(r => r.job.isPublicSector && !isNewsJob(r.job) && r.status === 'eligible').length;
   const privateCount = activeResults.filter(r => !r.job.isPublicSector && !isNewsJob(r.job) && r.status === 'eligible').length;
   const kpssFreeCount = activeResults.filter(r => !isNewsJob(r.job) && !r.job.requiresKpss && (!r.job.minKpssScore || r.job.minKpssScore === 0) && r.status === 'eligible').length;
   const allJobsCount = activeResults.filter(r => !isNewsJob(r.job) && r.status === 'eligible').length;
+
+  const normalizedSearchQuery = searchQuery.trim().toLocaleLowerCase('tr-TR');
 
   const filteredResults = useMemo(() => {
     return activeResults.filter((res) => {
@@ -175,14 +179,14 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
 
       // Status filter
       if (statusFilter === 'eligible' && res.status !== 'eligible') return false;
-      if (statusFilter === 'saved' && !savedJobIds.includes(res.job.id)) return false;
+      if (statusFilter === 'saved' && !savedJobIdSet.has(res.job.id)) return false;
 
       // Source filter
       if (sourceFilter !== 'all' && res.job.sourceId !== sourceFilter) return false;
 
       // Search query
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
+      if (normalizedSearchQuery) {
+        const q = normalizedSearchQuery;
         const matchTitle = res.job.title.toLowerCase().includes(q);
         const matchCompany = res.job.company.toLowerCase().includes(q);
         const matchCity = res.job.city.toLowerCase().includes(q);
@@ -192,7 +196,7 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
 
       return true;
     }).sort((a, b) => b.matchPercentage - a.matchPercentage);
-  }, [activeResults, statusFilter, sourceFilter, searchQuery, savedJobIds]);
+  }, [activeResults, statusFilter, sourceFilter, normalizedSearchQuery, savedJobIdSet]);
 
   // Sector display text
   const sectorSummary = criteria.includePublic && criteria.includePrivate
@@ -478,7 +482,7 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
               <JobCard
                 key={`${result.job.id}-${result.job.sourceId || idx}`}
                 result={result}
-                isSaved={savedJobIds.includes(result.job.id)}
+                isSaved={savedJobIdSet.has(result.job.id)}
                 verification={getJobStatus(result.job)}
                 onToggleSave={onToggleSave}
                 onRecheck={verifyUrl}
