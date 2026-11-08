@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback, useDeferredValue } from 'react';
 import { MatchResult, UserCriteria, JobSource, JobPosting } from '../types/job';
 import { JobCard } from './JobCard';
 import { evaluateJobMatch, normalizeTurkish } from '../services/matcher';
@@ -269,6 +269,7 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
   const [statusFilter, setStatusFilter] = useState<'all' | 'eligible' | 'partial' | 'ineligible' | 'saved' | 'public' | 'private' | 'news' | 'kpss_free' | 'kpss_required'>('eligible');
   const [sourceFilter, setSourceFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const [liveResults, setLiveResults] = useState<MatchResult[]>([]);
 
   // Dynamically fetch fresh live individual jobs from backend
@@ -443,7 +444,7 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
     allJobsCount
   } = activeStats;
 
-  const normalizedSearchQuery = searchQuery.trim().toLocaleLowerCase('tr-TR');
+  const normalizedSearchQuery = deferredSearchQuery.trim().toLocaleLowerCase('tr-TR');
 
   const sortedActiveResults = useMemo(
     () => [...activeResults].sort((a, b) => b.matchPercentage - a.matchPercentage),
