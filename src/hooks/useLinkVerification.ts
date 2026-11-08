@@ -26,8 +26,11 @@ export function useLinkVerification(jobs: JobPosting[]) {
 
   // Subscribe to changes from verification service
   useEffect(() => {
-    const unsubscribe = subscribeToLinkVerifications((updated) => {
-      setVerifications({ ...updated });
+    const unsubscribe = subscribeToLinkVerifications((url, result) => {
+      setVerifications(current => {
+        if (current[url] === result) return current;
+        return { ...current, [url]: result };
+      });
     });
     return unsubscribe;
   }, []);
