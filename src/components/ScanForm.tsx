@@ -20,6 +20,14 @@ import {
 } from 'lucide-react';
 import { normalizeTurkish } from '../services/matcher';
 
+const EDUCATION_OPTIONS = EDUCATION_LEVELS.map((edu) => (
+  <option key={edu.id} value={edu.id}>{edu.label}</option>
+));
+
+const CITY_OPTIONS = TURKEY_CITIES.map((city) => (
+  <option key={city.name} value={city.name}>{city.name}</option>
+));
+
 interface ScanFormProps {
   criteria: UserCriteria;
   sources: JobSource[];
@@ -91,7 +99,7 @@ export const ScanForm: React.FC<ScanFormProps> = ({
             <button
               type="button"
               onClick={() => handleSetSectorMode('kamu')}
-              className={`py-2.5 sm:py-3 px-2 sm:px-4 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-black transition-all flex items-center justify-center gap-1.5 sm:gap-2 border cursor-pointer select-none active:scale-[0.98] ${
+              className={`py-2.5 sm:py-3 px-2 sm:px-4 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-black transition-colors flex items-center justify-center gap-1.5 sm:gap-2 border cursor-pointer select-none active:scale-[0.98] ${
                 isPublicActive && !isPrivateActive 
                   ? 'bg-purple-600 hover:bg-purple-500 text-white border-purple-500 shadow-md shadow-purple-950/40 ring-2 ring-purple-400/60' 
                   : 'bg-white dark:bg-slate-800/95 hover:bg-purple-50 dark:hover:bg-slate-700/90 text-slate-800 dark:text-slate-100 border-purple-200/90 dark:border-purple-800/80 shadow-2xs'
@@ -108,7 +116,7 @@ export const ScanForm: React.FC<ScanFormProps> = ({
             <button
               type="button"
               onClick={() => handleSetSectorMode('ozel')}
-              className={`py-2.5 sm:py-3 px-2 sm:px-4 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-black transition-all flex items-center justify-center gap-1.5 sm:gap-2 border cursor-pointer select-none active:scale-[0.98] ${
+              className={`py-2.5 sm:py-3 px-2 sm:px-4 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-black transition-colors flex items-center justify-center gap-1.5 sm:gap-2 border cursor-pointer select-none active:scale-[0.98] ${
                 !isPublicActive && isPrivateActive 
                   ? 'bg-purple-600 hover:bg-purple-500 text-white border-purple-500 shadow-md shadow-purple-950/40 ring-2 ring-purple-400/60' 
                   : 'bg-white dark:bg-slate-800/95 hover:bg-purple-50 dark:hover:bg-slate-700/90 text-slate-800 dark:text-slate-100 border-purple-200/90 dark:border-purple-800/80 shadow-2xs'
@@ -125,7 +133,7 @@ export const ScanForm: React.FC<ScanFormProps> = ({
             <button
               type="button"
               onClick={() => handleSetSectorMode('both')}
-              className={`py-2.5 sm:py-3 px-2 sm:px-4 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-black transition-all flex items-center justify-center gap-1.5 sm:gap-2 border cursor-pointer select-none active:scale-[0.98] ${
+              className={`py-2.5 sm:py-3 px-2 sm:px-4 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-black transition-colors flex items-center justify-center gap-1.5 sm:gap-2 border cursor-pointer select-none active:scale-[0.98] ${
                 isPublicActive && isPrivateActive 
                   ? 'bg-purple-600 hover:bg-purple-500 text-white border-purple-500 shadow-md shadow-purple-950/40 ring-2 ring-purple-400/60' 
                   : 'bg-white dark:bg-slate-800/95 hover:bg-purple-50 dark:hover:bg-slate-700/90 text-slate-800 dark:text-slate-100 border-purple-200/90 dark:border-purple-800/80 shadow-2xs'
@@ -183,11 +191,7 @@ export const ScanForm: React.FC<ScanFormProps> = ({
                 onChange={(e) => onChange({ ...criteria, educationLevel: e.target.value })}
                 className="w-full px-3.5 py-2.5 text-sm bg-white/80 dark:bg-slate-900/80 border border-purple-200/80 dark:border-purple-900/60 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-purple-500 transition font-medium text-slate-900 dark:text-slate-100"
               >
-                {EDUCATION_LEVELS.map((edu) => (
-                  <option key={edu.id} value={edu.id}>
-                    {edu.label}
-                  </option>
-                ))}
+                {EDUCATION_OPTIONS}
               </select>
             </div>
 
@@ -289,11 +293,7 @@ export const ScanForm: React.FC<ScanFormProps> = ({
                   onChange={(e) => handleCityChange(e.target.value)}
                   className="w-full px-3.5 py-2.5 text-sm bg-white/80 dark:bg-slate-900/80 border border-purple-200/80 dark:border-purple-900/60 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-purple-500 transition font-medium text-slate-900 dark:text-slate-100"
                 >
-                  {TURKEY_CITIES.map((c) => (
-                    <option key={c.name} value={c.name}>
-                      {c.name}
-                    </option>
-                  ))}
+                  {CITY_OPTIONS}
                 </select>
               </div>
 
