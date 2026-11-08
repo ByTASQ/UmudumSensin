@@ -50,7 +50,9 @@ const VirtualJobList: React.FC<VirtualJobListProps> = ({ items, savedJobIdSet, o
   }, [items.length]);
 
   useEffect(() => {
-    heightsRef.current = heightsRef.current.slice(0, items.length);
+    rowObserversRef.current.forEach(observer => observer.disconnect());
+    rowObserversRef.current.clear();
+    heightsRef.current = new Array(items.length);
     rebuildOffsets();
 
     const el = containerRef.current;
