@@ -136,15 +136,66 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
 
   const savedJobIdSet = useMemo(() => new Set(savedJobIds), [savedJobIds]);
 
-  // Calculate counts for categories (yalnızca aktif ve şartlara uygun ilanlar üzerinden)
-  // KULLANICI KURALI: Sadece şartlara uygun ve aktif ilanlar listelenir!
-  const eligibleCount = activeResults.filter(r => r.status === 'eligible' && !isNewsJob(r.job)).length;
-  const savedCount = activeResults.filter(r => savedJobIdSet.has(r.job.id) && !isNewsJob(r.job)).length;
-  const newsCount = activeResults.filter(r => isNewsJob(r.job)).length;
-  const publicCount = activeResults.filter(r => r.job.isPublicSector && !isNewsJob(r.job) && r.status === 'eligible').length;
-  const privateCount = activeResults.filter(r => !r.job.isPublicSector && !isNewsJob(r.job) && r.status === 'eligible').length;
-  const kpssFreeCount = activeResults.filter(r => !isNewsJob(r.job) && !r.job.requiresKpss && (!r.job.minKpssScore || r.job.minKpssScore === 0) && r.status === 'eligible').length;
-  const allJobsCount = activeResults.filter(r => !isNewsJob(r.job) && r.status === 'eligible').length;
+  // Tüm kategori sayaçlarını tek geçişte hesapla. Böylece her render'da
+  // activeResults üzerinde 7 ayrı filter() taraması yapılmaz.
+  const activeStats = useMemo(() => {
+    const newsJobs = new WeakSet<JobPosting>();
+    let eligibleCount = 0;
+    let savedCount = 0;
+    let newsCount = 0;
+    let publicCount = 0;
+    let privateCount = 0;
+    let kpssFreeCount = 0;
+    let allJobsCount = 0;
+
+    for (const result of activeResults) {
+      const job = result.job;
+      const news = isNewsJob(job);
+
+      if (news) {
+        newsJobs.add(job);
+        newsCount++;
+        continue;
+      }
+
+      if (result.status === 'eligible') {
+        eligibleCount++;
+        allJobsCount++;
+
+        if (savedJobIdSet.has(job.id)) savedCount++;
+        if (job.isPublicSector) publicCount++;
+        else privateCount++;
+
+        if (!job.requiresKpss && (!job.minKpssScore || job.minKpssScore === 0)) {
+          kpssFreeCount++;
+        }
+      } else if (savedJobIdSet.has(job.id)) {
+        savedCount++;
+      }
+    }
+
+    return {
+      newsJobs,
+      eligibleCount,
+      savedCount,
+      newsCount,
+      publicCount,
+      privateCount,
+      kpssFreeCount,
+      allJobsCount
+    };
+  }, [activeResults, savedJobIdSet]);
+
+  const {
+    newsJobs,
+    eligibleCount,
+    savedCount,
+    newsCount,
+    publicCount,
+    privateCount,
+    kpssFreeCount,
+    allJobsCount
+  } = activeStats;
 
   const normalizedSearchQuery = searchQuery.trim().toLocaleLowerCase('tr-TR');
 
@@ -152,10 +203,11 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
     return activeResults.filter((res) => {
       // KULLANICI KURALI: Memurlar.net kesinlikle uygun ilanlar veya kamu/özel listesinde olamaz!
       // SADECE "Haberler" sekmesinde görünebilir!
-      if (statusFilter !== 'news' && isNewsJob(res.job)) {
+      const isNews = newsJobs.has(res.job);
+      if (statusFilter !== 'news' && isNews) {
         return false;
       }
-      if (statusFilter === 'news' && !isNewsJob(res.job)) {
+      if (statusFilter === 'news' && !isNews) {
         return false;
       }
 
