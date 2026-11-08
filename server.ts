@@ -568,8 +568,9 @@ async function startServer() {
     }
 
     const checkLimit = jobs.slice(0, 30);
-    const checks = await Promise.all(
-      checkLimit.map(async (job: any) => {
+    const checks = await mapWithConcurrency(
+      checkLimit,
+      async (job: any) => {
         const url = job.originalUrl || '';
         const checkResult = await checkSingleUrl(url);
         return {
@@ -578,7 +579,7 @@ async function startServer() {
           checkResult,
           isLiveAndActive: !checkResult.isExpired && !checkResult.is404 && checkResult.status === 'active'
         };
-      })
+      }
     );
 
     const activeJobIds = new Set(checks.filter(c => c.isLiveAndActive).map(c => c.jobId));
