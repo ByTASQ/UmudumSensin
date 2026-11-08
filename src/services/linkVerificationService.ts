@@ -177,29 +177,45 @@ export async function verifyBatchLinks(
   }
 
   try {
-    const response = await fetch('/api/verify-urls', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ urls: toFetch }),
-      signal: AbortSignal.timeout(10000)
-    });
+    // Backend intentionally limits each request to 25 URLs.
+    // Chunking here prevents silent truncation and avoids a large client-side burst.
+    const chunks: string[][] = [];
+    for (let i = 0; i < toFetch.length; i += 25) {
+      chunks.push(toFetch.slice(i, i + 25));
+    }
 
-    if (response.ok) {
+    for (const chunk of chunks) {
+      const response = await fetch('/api/verify-urls', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls: chunk }),
+        signal: AbortSignal.timeout(10000)
+      });
+
+      if (!response.ok) {
+        // Keep fallback bounded to the current 25-item chunk.
+        await Promise.all(chunk.map(u => verifySingleLink(u, forceRefresh)));
+        continue;
+      }
+
       const data = await response.json();
       if (Array.isArray(data.results)) {
         for (const item of data.results) {
           memoryCache.set(item.url, item);
         }
-        saveCacheToStorage();
-        notifyListeners();
       }
-    } else {
-      // Fallback one by one
-      await Promise.all(toFetch.map(u => verifySingleLink(u, forceRefresh)));
     }
+
+    // Persist and notify once after the complete batch.
+    saveCacheToStorage();
+    notifyListeners();
   } catch (err) {
-    // Fallback one by one
-    await Promise.all(toFetch.map(u => verifySingleLink(u, forceRefresh)));
+    // If the batch endpoint itself fails, fall back in bounded chunks
+    // rather than launching one request per URL at once.
+    for (let i = 0; i < toFetch.length; i += 25) {
+      const chunk = toFetch.slice(i, i + 25);
+      await Promise.all(chunk.map(u => verifySingleLink(u, forceRefresh)));
+    }
   }
 
   const output: Record<string, LinkVerificationResult> = {};
