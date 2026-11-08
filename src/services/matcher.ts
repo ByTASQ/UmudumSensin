@@ -88,7 +88,7 @@ function getNormalizedJobFields(job: JobPosting): NormalizedJobFields {
       ELECTRONICS_KEYWORDS.some(k => allowedNorm.includes(k))
     ),
     isCs: allowedDepartments.some(allowedNorm => {
-      const jobTokens = allowedNorm.split(/[s,/-]+/);
+      const jobTokens = allowedNorm.split(/[\s,/-]+/);
       return CS_KEYWORDS.some(k => allowedNorm.includes(k)) ||
              jobTokens.some(t => t === 'it' || t === 'bt');
     })
