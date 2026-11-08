@@ -17,6 +17,16 @@ const JOB_CARD_FIELDS_CACHE = new WeakMap<MatchResult['job'], CachedJobCardField
 
 const SAFE_JOB_URL_CACHE = new WeakMap<MatchResult['job'], string>();
 
+interface CachedJobCardDisplay {
+  isMemurlarNews: boolean;
+  locationText: string;
+  quotaText: string;
+  deadlineText: string;
+  companyDisplayText: string;
+}
+
+const JOB_CARD_DISPLAY_CACHE = new WeakMap<MatchResult['job'], CachedJobCardDisplay>();
+
 const getCachedSafeJobUrl = (job: MatchResult['job']): string => {
   const cached = SAFE_JOB_URL_CACHE.get(job);
   if (cached !== undefined) return cached;
@@ -64,50 +74,62 @@ const JobCardComponent: React.FC<JobCardProps> = ({
   const safeUrl = getCachedSafeJobUrl(job);
   const { cityLower, titleLower, descLower, companyLower, sourceIdLower, sourceDomainLower, originalUrlLower } = getCachedJobCardFields(job);
 
-  // Memurlar.net bir kamu kurumu değil, ilan haberleri yapan bir haber sitesidir.
-  const isMemurlarNews =
-    sourceIdLower === 'memurlar_net' ||
-    sourceIdLower === 'memurlar' ||
-    sourceDomainLower.includes('memurlar.net') ||
-    originalUrlLower.includes('memurlar.net');
+  let display = JOB_CARD_DISPLAY_CACHE.get(job);
+  if (!display) {
+    const isMemurlarNews =
+      sourceIdLower === 'memurlar_net' ||
+      sourceIdLower === 'memurlar' ||
+      sourceDomainLower.includes('memurlar.net') ||
+      originalUrlLower.includes('memurlar.net');
 
-  // Konum: Eğer ilan tüm iller / tüm Türkiye şeklinde girilmişse,
-  // kullanıcının aradığı il (örn: Aydın) yerine "Tüm İller" olarak gösterilir.
+    const isNationwide = job.isNationwide === true ||
+                         cityLower.includes('tüm') ||
+                         cityLower.includes('tum') ||
+                         cityLower.includes('genel') ||
+                         cityLower.includes('türkiye') ||
+                         cityLower.includes('turkiye') ||
+                         titleLower.includes('tüm iller') ||
+                         titleLower.includes('tum iller') ||
+                         titleLower.includes('türkiye geneli') ||
+                         titleLower.includes('turkiye geneli') ||
+                         titleLower.includes('81 il') ||
+                         descLower.includes('tüm iller') ||
+                         descLower.includes('türkiye geneli');
 
-  const isNationwide = job.isNationwide === true || 
-                       cityLower.includes('tüm') || 
-                       cityLower.includes('tum') || 
-                       cityLower.includes('genel') || 
-                       cityLower.includes('türkiye') || 
-                       cityLower.includes('turkiye') ||
-                       titleLower.includes('tüm iller') ||
-                       titleLower.includes('tum iller') ||
-                       titleLower.includes('türkiye geneli') ||
-                       titleLower.includes('turkiye geneli') ||
-                       titleLower.includes('81 il') ||
-                       descLower.includes('tüm iller') ||
-                       descLower.includes('türkiye geneli');
+    const locationText = isNationwide
+      ? 'Tüm İller'
+      : (job.district && job.district !== 'Merkez'
+          ? `${job.city} / ${job.district}`
+          : job.city || 'Tüm İller');
 
-  const locationText = isNationwide
-    ? 'Tüm İller'
-    : (job.district && job.district !== 'Merkez'
-        ? `${job.city} / ${job.district}`
-        : job.city || 'Tüm İller');
+    const quotaText = job.quota ? `${job.quota} Kişi` : '1 Kişi';
+    const deadlineText = job.deadlineDate || 'Belirtilmemiş';
 
-  // Kontenjan
-  const quotaText = job.quota ? `${job.quota} Kişi` : '1 Kişi';
+    const isTitleRedundant = Boolean(job.title && (
+      titleLower.includes(companyLower) ||
+      companyLower.includes(titleLower)
+    ));
+    const companyDisplayText = !isTitleRedundant && job.title
+      ? `${job.company} · ${job.title}`
+      : job.company || job.title || 'Belirtilmemiş Kurum';
 
-  // Son Başvuru Tarihi
-  const deadlineText = job.deadlineDate || 'Belirtilmemiş';
+    display = {
+      isMemurlarNews,
+      locationText,
+      quotaText,
+      deadlineText,
+      companyDisplayText
+    };
+    JOB_CARD_DISPLAY_CACHE.set(job, display);
+  }
 
-  // Şirket / Kurum metni
-  const isTitleRedundant = Boolean(job.title && (
-    titleLower.includes(companyLower) ||
-    companyLower.includes(titleLower)
-  ));
-  const companyDisplayText = !isTitleRedundant && job.title
-    ? `${job.company} · ${job.title}`
-    : job.company || job.title || 'Belirtilmemiş Kurum';
+  const {
+    isMemurlarNews,
+    locationText,
+    quotaText,
+    deadlineText,
+    companyDisplayText
+  } = display;
 
   const handleCardClick = () => {
     window.open(safeUrl, '_blank', 'noopener,noreferrer');
