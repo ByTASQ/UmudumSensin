@@ -18,6 +18,8 @@ import { useLinkVerification } from '../hooks/useLinkVerification';
 import { isJobActive } from '../utils/dateUtils';
 import { isSpecificJobUrl } from '../services/preciseSearchService';
 
+const JOB_CITY_NORMALIZED_CACHE = new WeakMap<JobPosting, string>();
+
 interface ResultsViewProps {
   results: MatchResult[];
   criteria: UserCriteria;
@@ -88,7 +90,11 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
 
   const isJobCityMatching = (job: JobPosting): boolean => {
     if (!isCityFilterActive) return true;
-    const jobCityNorm = normalizeTurkish(job.city || '');
+    let jobCityNorm = JOB_CITY_NORMALIZED_CACHE.get(job);
+    if (jobCityNorm === undefined) {
+      jobCityNorm = normalizeTurkish(job.city || '');
+      JOB_CITY_NORMALIZED_CACHE.set(job, jobCityNorm);
+    }
     const isNationwide = job.isNationwide === true ||
                          jobCityNorm.includes('tum') ||
                          jobCityNorm.includes('genel') ||
