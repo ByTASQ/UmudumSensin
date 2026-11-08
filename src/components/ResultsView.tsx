@@ -43,6 +43,34 @@ const getJobSearchFields = (job: JobPosting) => {
 const JOB_NEWS_CACHE = new WeakMap<JobPosting, boolean>();
 const JOB_SPECIFIC_URL_CACHE = new WeakMap<JobPosting, boolean>();
 
+interface LiveSearchCacheEntry {
+  expiresAt: number;
+  results: MatchResult[];
+}
+
+const LIVE_SEARCH_CACHE = new Map<string, LiveSearchCacheEntry>();
+const LIVE_SEARCH_CACHE_TTL = 30_000;
+const LIVE_SEARCH_CACHE_MAX = 8;
+
+const getLiveSearchCacheKey = (profession: string, city: string): string =>
+  `${profession.trim().toLocaleLowerCase('tr-TR')}|${city.trim().toLocaleLowerCase('tr-TR')}`;
+
+const setLiveSearchCache = (key: string, results: MatchResult[]): void => {
+  LIVE_SEARCH_CACHE.delete(key);
+  LIVE_SEARCH_CACHE.set(key, {
+    expiresAt: Date.now() + LIVE_SEARCH_CACHE_TTL,
+    results
+  });
+
+  while (LIVE_SEARCH_CACHE.size > LIVE_SEARCH_CACHE_MAX) {
+    const oldestKey = LIVE_SEARCH_CACHE.keys().next().value;
+    if (oldestKey === undefined) break;
+    LIVE_SEARCH_CACHE.delete(oldestKey);
+  }
+};
+
+
+
 interface VirtualJobListProps {
   items: MatchResult[];
   savedJobIdSet: Set<string>;
@@ -303,6 +331,14 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
     }
 
     const controller = new AbortController();
+    const cacheKey = getLiveSearchCacheKey(criteria.profession, criteria.city || '');
+    const cached = LIVE_SEARCH_CACHE.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      setLiveResults(cached.results);
+      return () => controller.abort();
+    }
+    if (cached) LIVE_SEARCH_CACHE.delete(cacheKey);
+
     const timer = window.setTimeout(() => {
       fetch(`/api/live-search-jobs?profession=${encodeURIComponent(criteria.profession)}&city=${encodeURIComponent(criteria.city || '')}`, {
         signal: controller.signal
@@ -311,6 +347,7 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
         .then(data => {
           if (Array.isArray(data.jobs)) {
             const mapped = data.jobs.map((j: JobPosting) => evaluateJobMatch(j, criteria));
+            setLiveSearchCache(cacheKey, mapped);
             setLiveResults(mapped);
           }
         })
