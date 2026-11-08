@@ -585,7 +585,7 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
               {criteria.profession || 'Tüm Meslekler'}
             </h2>
             <span className="px-2.5 py-0.5 text-[11px] font-extrabold rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/80 shrink-0 flex items-center gap-1.5 shadow-2xs">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
               <span>{activeResults.length} Aktif İlan</span>
             </span>
           </div>
