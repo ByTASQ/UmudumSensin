@@ -1,5 +1,4 @@
 import express, { Request, Response } from 'express';
-import cors from 'cors';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import fs from 'fs';
@@ -278,7 +277,13 @@ export async function checkSingleUrl(rawUrl: string): Promise<UrlCheckResult> {
 
 async function startServer() {
   const app = express();
-app.use(cors({ origin: true }));
+app.use((req: Request, res: Response, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
   const port = process.env.PORT || 3000;
 
   app.use(express.json());
