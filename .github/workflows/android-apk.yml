@@ -48,9 +48,6 @@ jobs:
       - name: Build web app
         run: npm run build
 
-      - name: Install Capacitor
-        run: npm install --no-save @capacitor/core @capacitor/cli @capacitor/android
-
       - name: Create Capacitor config
         run: |
           cat > capacitor.config.ts <<'EOF'
@@ -65,9 +62,6 @@ jobs:
 
           export default config;
           EOF
-
-      - name: Add Android platform
-        run: npx cap add android
 
       - name: Sync Android
         run: npx cap sync android
