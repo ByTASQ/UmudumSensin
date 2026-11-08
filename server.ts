@@ -22,6 +22,33 @@ interface UrlCheckResult {
 // In-memory cache for fast repeat requests
 const urlCache = new Map<string, { result: UrlCheckResult; timestamp: number }>();
 const CACHE_TTL_MS = 60 * 1000; // 1 minute in memory
+const URL_CHECK_CONCURRENCY = 4;
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  worker: (item: T) => Promise<R>,
+  concurrency = URL_CHECK_CONCURRENCY
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+
+  const runWorker = async () => {
+    while (true) {
+      const index = nextIndex++;
+      if (index >= items.length) return;
+      results[index] = await worker(items[index]);
+    }
+  };
+
+  await Promise.all(
+    Array.from(
+      { length: Math.min(Math.max(1, concurrency), items.length) },
+      () => runWorker()
+    )
+  );
+
+  return results;
+}
 
 // Turkish-aware string normalizer for accurate detection of expired job notices
 function normalizeForDetection(text: string): string {
@@ -505,20 +532,26 @@ async function startServer() {
 
       // CANLI DOĞRULAMA FİLTRESİ:
       // Süresi dolmuş veya "başvuru süresi sonra ermiştir" uyarısı veren ilanları sonuçlardan ayıkla
-      const verifiedJobs = [];
-      for (const job of jobs) {
+      const verifiedJobs: any[] = [];
+      const uniqueJobs = Array.from(
+        new Map(jobs.map(job => [job.originalUrl, job])).values()
+      );
+
+      const verificationResults = await mapWithConcurrency(uniqueJobs, async (job) => {
         try {
           const check = await checkSingleUrl(job.originalUrl);
-          if (!check.isExpired && !check.is404 && check.status === 'active') {
-            verifiedJobs.push(job);
-          }
+          return !check.isExpired && !check.is404 && check.status === 'active';
         } catch {
           // If check threw an error, keep job only if not an expired url
-          if (!job.originalUrl.includes('404') && !job.originalUrl.includes('suresi-dolmus')) {
-            verifiedJobs.push(job);
-          }
+          return !job.originalUrl.includes('404') && !job.originalUrl.includes('suresi-dolmus');
         }
-      }
+      });
+
+      uniqueJobs.forEach((job, index) => {
+        if (verificationResults[index]) {
+          verifiedJobs.push(job);
+        }
+      });
 
       return res.json({ jobs: verifiedJobs });
     } catch (err: any) {
@@ -570,9 +603,10 @@ async function startServer() {
     }
 
     // Limit batch size to 25 to prevent abuse
-    const limitedUrls = urls.slice(0, 25);
-    const results = await Promise.all(
-      limitedUrls.map(url => checkSingleUrl(url))
+    const limitedUrls = Array.from(new Set(urls.slice(0, 25)));
+    const results = await mapWithConcurrency(
+      limitedUrls,
+      url => checkSingleUrl(url)
     );
 
     return res.json({ results });
