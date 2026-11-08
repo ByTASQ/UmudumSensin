@@ -35,6 +35,11 @@ import { SourcesView } from './components/SourcesView';
 import { PrivacyView } from './components/PrivacyView';
 import { ScanningModal } from './components/ScanningModal';
 
+const MATCH_EXECUTION_CACHE = new WeakMap<
+  UserCriteria,
+  WeakMap<JobSource[], MatchResult[]>
+>();
+
 export default function App() {
   const [criteria, setCriteria] = useState<UserCriteria>(loadSavedCriteria);
   const [sources, setSources] = useState<JobSource[]>(loadSources);
@@ -81,6 +86,18 @@ export default function App() {
 
   // Perform the match analysis
   const executeMatch = (targetCriteria: UserCriteria) => {
+    let sourceCache = MATCH_EXECUTION_CACHE.get(targetCriteria);
+    if (!sourceCache) {
+      sourceCache = new WeakMap<JobSource[], MatchResult[]>();
+      MATCH_EXECUTION_CACHE.set(targetCriteria, sourceCache);
+    }
+
+    const cachedResults = sourceCache.get(sources);
+    if (cachedResults) {
+      setMatchResults(cachedResults);
+      return cachedResults;
+    }
+
     // Generate authentic, dynamic job postings tailored to the user's specific profession, city & sources
     const dynamicPool = generateDynamicJobPool(targetCriteria, sources);
     const enabledSourceIds = new Set(sources.filter(s => s.enabled).map(s => s.id));
@@ -120,6 +137,7 @@ export default function App() {
       return b.matchPercentage - a.matchPercentage;
     });
 
+    sourceCache.set(sources, evaluated);
     setMatchResults(evaluated);
     return evaluated;
   };
