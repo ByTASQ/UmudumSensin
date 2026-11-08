@@ -417,16 +417,6 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
     return isNationwide || isCityExact;
   };
 
-  // Sadece süresi dolmamış, linki 404 olmayan, boş arama formu/genel sayfa OLMAYAN ve aranan ille uyuşan tekil ilanları listele
-  const activeResults = useMemo(() => {
-    return allMergedResults.filter(r => 
-      isJobActive(r.job) && 
-      !isJobLinkBroken(r.job) && 
-      isJobSpecificUrl(r.job) &&
-      isJobCityMatching(r.job)
-    );
-  }, [allMergedResults, verificationVersion, isCityFilterActive, userCityNorm]);
-
   // Memurlar.net ve tüm haber bülteni/rehber içeriklerini kesin olarak haber tanımla
   const isNewsJob = (job: JobPosting): boolean => {
     const cached = JOB_NEWS_CACHE.get(job);
@@ -437,14 +427,14 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
     const sourceNameLower = (job.sourceName || '').toLowerCase();
     const titleLower = (job.title || '').toLowerCase();
 
-    const isMemurlar = 
-      sourceIdLower === 'memurlar' ||
+    const isMemurlar =
       sourceIdLower === 'memurlar_net' ||
+      sourceIdLower === 'memurlar' ||
       domainLower.includes('memurlar.net') ||
       urlLower.includes('memurlar.net') ||
       sourceNameLower.includes('memurlar');
 
-    const isPureInformational = 
+    const isPureInformational =
       job.id === 'job-memurlar-portal-001' ||
       titleLower.includes('rehberi') ||
       titleLower.includes('tarihleri belli oldu') ||
@@ -458,9 +448,10 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
 
   const savedJobIdSet = useMemo(() => new Set(savedJobIds), [savedJobIds]);
 
-  // Tüm kategori sayaçlarını tek geçişte hesapla. Böylece her render'da
-  // activeResults üzerinde 7 ayrı filter() taraması yapılmaz.
-  const activeStats = useMemo(() => {
+  // Aktif ilanları ve kategori istatistiklerini tek geçişte üret.
+  // Böylece activeResults -> activeStats şeklindeki ikinci tam tarama kaldırılır.
+  const activeResultsAndStats = useMemo(() => {
+    const activeResults: MatchResult[] = [];
     const newsJobs = new WeakSet<JobPosting>();
     let eligibleCount = 0;
     let savedCount = 0;
@@ -470,8 +461,18 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
     let kpssFreeCount = 0;
     let allJobsCount = 0;
 
-    for (const result of activeResults) {
+    for (const result of allMergedResults) {
       const job = result.job;
+      if (
+        !isJobActive(job) ||
+        isJobLinkBroken(job) ||
+        !isJobSpecificUrl(job) ||
+        !isJobCityMatching(job)
+      ) {
+        continue;
+      }
+
+      activeResults.push(result);
       const news = isNewsJob(job);
 
       if (news) {
@@ -497,6 +498,7 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
     }
 
     return {
+      activeResults,
       newsJobs,
       eligibleCount,
       savedCount,
@@ -506,9 +508,10 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
       kpssFreeCount,
       allJobsCount
     };
-  }, [activeResults, savedJobIdSet]);
+  }, [allMergedResults, verificationVersion, isCityFilterActive, userCityNorm, savedJobIdSet]);
 
   const {
+    activeResults,
     newsJobs,
     eligibleCount,
     savedCount,
@@ -517,7 +520,7 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
     privateCount,
     kpssFreeCount,
     allJobsCount
-  } = activeStats;
+  } = activeResultsAndStats;
 
   const normalizedSearchQuery = deferredSearchQuery.trim().toLocaleLowerCase('tr-TR');
 
