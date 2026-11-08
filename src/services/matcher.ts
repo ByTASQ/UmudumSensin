@@ -32,6 +32,7 @@ interface EvaluationContext {
   userDeptNorm: string;
   userEduNorm: string;
   userProfNorm: string;
+  professionContext: ReturnType<typeof getProfessionContext>;
   userDeptAndProfTokens: string[];
   isUserElectronics: boolean;
   isUserCs: boolean;
@@ -281,26 +282,21 @@ function getStem(tok: string): string {
  *    Meslek şartlarında "Bilgisayar" ile başlayan veya içeren tüm unvanlar
  *    (Programcı, Öğretmen, Bilgisayarlı Muhasebe, Tekniker vb.) listelenir.
  */
-export function checkProfessionMatch(
-  userProfession?: string,
-  jobTitle?: string,
-  allowedDepartments: string[] = [],
-  jobDescription?: string
+function checkProfessionMatchNormalized(
+  userProfession: string,
+  normUserProf: string,
+  normTitle: string,
+  normDepts: string[],
+  normDesc: string,
+  context: ReturnType<typeof getProfessionContext>
 ): {
   isMatch: boolean;
   matchType: 'exact' | 'prefix' | 'none';
   reason: string;
 } {
-  const normUserProf = normalizeTurkish(userProfession);
   if (!normUserProf) {
     return { isMatch: true, matchType: 'exact', reason: 'Unvan filtresi belirtilmedi' };
   }
-
-  const normTitle = normalizeTurkish(jobTitle || '');
-  const normDepts = (allowedDepartments || []).map(d => normalizeTurkish(d));
-  const normDesc = normalizeTurkish(jobDescription || '');
-
-  const context = getProfessionContext(userProfession);
   const { cleanUserProf, userTokens, isMultiWordSpecific, stems } = context;
   if (userTokens.length === 0) {
     return { isMatch: true, matchType: 'exact', reason: 'Unvan kriteri boş' };
@@ -447,6 +443,30 @@ export function checkProfessionMatch(
   };
 }
 
+export function checkProfessionMatch(
+  userProfession?: string,
+  jobTitle?: string,
+  allowedDepartments: string[] = [],
+  jobDescription?: string
+): {
+  isMatch: boolean;
+  matchType: 'exact' | 'prefix' | 'none';
+  reason: string;
+} {
+  const normUserProf = normalizeTurkish(userProfession);
+  const normTitle = normalizeTurkish(jobTitle || '');
+  const normDepts = (allowedDepartments || []).map(d => normalizeTurkish(d));
+  const normDesc = normalizeTurkish(jobDescription || '');
+  return checkProfessionMatchNormalized(
+    userProfession || '',
+    normUserProf,
+    normTitle,
+    normDepts,
+    normDesc,
+    getProfessionContext(userProfession)
+  );
+}
+
 export function evaluateJobMatch(job: JobPosting, criteria: UserCriteria): MatchResult {
   let criteriaCache = MATCH_RESULT_CACHE.get(criteria);
   if (!criteriaCache) {
@@ -483,6 +503,7 @@ export function evaluateJobMatch(job: JobPosting, criteria: UserCriteria): Match
       ? parseFloat(String(criteria.kpssScore)) : null;
     evaluationContext = {
       userAge, userCityNorm, userDeptNorm, userEduNorm, userProfNorm,
+      professionContext: getProfessionContext(criteria.profession),
       userDeptAndProfTokens, isUserElectronics, isUserCs, isEducationFlexible,
       userIsLise: userEduNorm.includes('lise') || userEduNorm.includes('ortaogretim'),
       userIsOnlisans: userEduNorm.includes('onlisans'),
@@ -494,7 +515,7 @@ export function evaluateJobMatch(job: JobPosting, criteria: UserCriteria): Match
   }
 
   const {
-    userAge, userCityNorm, userDeptNorm, userEduNorm, userProfNorm,
+    userAge, userCityNorm, userDeptNorm, userEduNorm, userProfNorm, professionContext,
     userDeptAndProfTokens, isUserElectronics, isUserCs, isEducationFlexible,
     userIsLise, userIsOnlisans, userIsLisans, userIsYuksek, isAllCities,
     isNoKpssChecked, userKpss
@@ -795,11 +816,13 @@ export function evaluateJobMatch(job: JobPosting, criteria: UserCriteria): Match
 
   // 6. MESLEK / ÜNVAN UYUM KONTROLÜ (PROFESSION MATCH)
   if (criteria.profession && criteria.profession.trim()) {
-    const profMatch = checkProfessionMatch(
+    const profMatch = checkProfessionMatchNormalized(
       criteria.profession,
+      userProfNorm,
       jobFields.title,
       jobFields.allowedDepartments,
-      jobFields.description
+      jobFields.description,
+      professionContext
     );
 
     if (profMatch.isMatch) {
