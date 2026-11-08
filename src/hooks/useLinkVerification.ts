@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
   LinkVerificationResult, 
   getAllCachedVerifications, 
-  subscribeToLinkVerifications, 
+  subscribeToLinkVerifications,
+  subscribeToLinkVerificationBatches,
   verifyBatchLinks, 
   verifySingleLink 
 } from '../services/linkVerificationService';
@@ -26,13 +27,34 @@ export function useLinkVerification(jobs: JobPosting[]) {
 
   // Subscribe to changes from verification service
   useEffect(() => {
-    const unsubscribe = subscribeToLinkVerifications((url, result) => {
+    const unsubscribeSingle = subscribeToLinkVerifications((url, result) => {
       setVerifications(current => {
         if (current[url] === result) return current;
         return { ...current, [url]: result };
       });
     });
-    return unsubscribe;
+
+    const unsubscribeBatch = subscribeToLinkVerificationBatches((results) => {
+      if (results.length === 0) return;
+      setVerifications(current => {
+        let changed = false;
+        const next = { ...current };
+
+        for (const result of results) {
+          if (next[result.url] !== result) {
+            next[result.url] = result;
+            changed = true;
+          }
+        }
+
+        return changed ? next : current;
+      });
+    });
+
+    return () => {
+      unsubscribeSingle();
+      unsubscribeBatch();
+    };
   }, []);
 
   // Trigger batch verification when job URLs change
