@@ -251,6 +251,20 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
     }).sort((a, b) => b.matchPercentage - a.matchPercentage);
   }, [activeResults, statusFilter, sourceFilter, normalizedSearchQuery, savedJobIdSet]);
 
+  // Kart JSX'lerini yalnızca sonuç listesi gerçekten değiştiğinde yeniden oluştur.
+  // Özellikle link doğrulama state'i değiştiğinde gereksiz yüzlerce React elementinin
+  // tekrar oluşturulmasını engeller.
+  const jobCards = useMemo(() => {
+    return filteredResults.map((result, idx) => (
+      <JobCard
+        key={`${result.job.id}-${result.job.sourceId || idx}`}
+        result={result}
+        isSaved={savedJobIdSet.has(result.job.id)}
+        onToggleSave={onToggleSave}
+      />
+    ));
+  }, [filteredResults, savedJobIdSet, onToggleSave]);
+
   // Sector display text
   const sectorSummary = criteria.includePublic && criteria.includePrivate
     ? 'Kamu & Özel Sektör'
@@ -531,14 +545,7 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
           </div>
         ) : (
           <div className="divide-y divide-purple-100/70 dark:divide-purple-950/40">
-            {filteredResults.map((result, idx) => (
-              <JobCard
-                key={`${result.job.id}-${result.job.sourceId || idx}`}
-                result={result}
-                isSaved={savedJobIdSet.has(result.job.id)}
-                onToggleSave={onToggleSave}
-              />
-            ))}
+            {jobCards}
           </div>
         )}
       </div>
