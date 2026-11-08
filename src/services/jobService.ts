@@ -155,7 +155,8 @@ export function generateDynamicJobPool(
   // KULLANICI KURALI: Eğer kullanıcı bir unvan yazmışsa ve bu unvan gerçek bir meslek/kadro değilse
   // (Örn: rastgele harfler "hukloıjkıuh", "asdfgh"), ASLA sahte belediye/kamu ilanları üretilmez!
   // Kesinlikle boş havuz döndürülür; böylece aranan unvana ait ilan bulunamadığı doğru ve dürüstçe gösterilir.
-  if (rawProfession && !isRecognizedProfession(rawProfession)) {
+  const recognizedProfession = !rawProfession || isRecognizedProfession(rawProfession);
+  if (!recognizedProfession) {
     return [];
   }
 
@@ -1391,8 +1392,8 @@ export function generateDynamicJobPool(
     cityFilter: isCityFilterActive
   });
   const nowForBaseCache = Date.now();
-  let baseSampleList = BASE_SAMPLE_CACHE.get(baseSampleCacheKey)?.jobs;
   const cachedBase = BASE_SAMPLE_CACHE.get(baseSampleCacheKey);
+  let baseSampleList = cachedBase?.jobs;
 
   if (!baseSampleList || !cachedBase || cachedBase.expiresAt <= nowForBaseCache) {
     baseSampleList = [];
@@ -1457,7 +1458,7 @@ export function generateDynamicJobPool(
     }
   }
 
-  if (currentCityMatches < 8 && city && profession && isRecognizedProfession(rawProfession)) {
+  if (currentCityMatches < 8 && city && profession && recognizedProfession) {
     const capCity = city.charAt(0).toLocaleUpperCase('tr-TR') + city.slice(1);
     const capProf = profession.charAt(0).toLocaleUpperCase('tr-TR') + profession.slice(1);
     const slugProf = toUrlSlug(profession);
