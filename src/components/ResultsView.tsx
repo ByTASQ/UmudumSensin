@@ -524,7 +524,7 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
     <div className="w-full flex-1 flex flex-col min-h-0 bg-transparent">
       
       {/* 1. ÜST KRİTER VE FİLTRE ÇUBUĞU */}
-      <div className="w-full px-4 sm:px-8 py-3 border-b border-purple-200/50 dark:border-purple-900/40 bg-white/40 dark:bg-slate-950/40 backdrop-blur-xs shrink-0 flex flex-col md:flex-row md:items-center justify-between gap-3">
+      <div className="w-full px-4 sm:px-8 py-3 border-b border-purple-200/50 dark:border-purple-900/40 bg-white/40 dark:bg-slate-950/40 shrink-0 flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-extrabold text-slate-900 dark:text-slate-50 truncate">
@@ -562,7 +562,7 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
       </div>
 
       {/* 2. KATEGORİ VE ARAMA PANELİ */}
-      <div className="p-3 sm:px-8 border-b border-purple-200/50 dark:border-purple-900/40 bg-white/30 dark:bg-slate-950/30 backdrop-blur-xs space-y-2.5 shrink-0">
+      <div className="p-3 sm:px-8 border-b border-purple-200/50 dark:border-purple-900/40 bg-white/30 dark:bg-slate-950/30 space-y-2.5 shrink-0">
         {/* Sekme Düğmeleri */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs scrollbar-none">
           <button
