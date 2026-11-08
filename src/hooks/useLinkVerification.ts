@@ -98,11 +98,23 @@ export function useLinkVerification(jobs: JobPosting[]) {
     return await verifySingleLink(url, true);
   }, []);
 
+  // Resolve each current job URL/status once per verification state.
+  // ResultsView may inspect the same job many times while filtering.
+  const jobStatusMap = useMemo(() => {
+    const map = new WeakMap<JobPosting, LinkVerificationResult | null>();
+
+    for (const job of jobs) {
+      const url = getSafeJobUrl(job);
+      map.set(job, verifications[url] || (job.originalUrl ? verifications[job.originalUrl] : null) || null);
+    }
+
+    return map;
+  }, [jobs, verifications]);
+
   // Check if a specific job's link is 404 or broken
   const getJobStatus = useCallback((job: JobPosting): LinkVerificationResult | null => {
-    const url = getSafeJobUrl(job);
-    return verifications[url] || (job.originalUrl ? verifications[job.originalUrl] : null) || null;
-  }, [verifications]);
+    return jobStatusMap.get(job) ?? null;
+  }, [jobStatusMap]);
 
   // Check if a job is confirmed expired / deadline reached
   const isJobExpired = useCallback((job: JobPosting): boolean => {
