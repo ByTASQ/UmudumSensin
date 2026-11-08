@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { UserCriteria, JobSource, MatchResult } from './types/job';
 import { 
   loadSources, 
@@ -209,10 +209,10 @@ export default function App() {
   };
 
   // Saved bookmark toggling
-  const handleToggleSaveJob = (jobId: string) => {
+  const handleToggleSaveJob = useCallback((jobId: string) => {
     const nextSaved = toggleSaveJobId(jobId);
     setSavedJobIds(nextSaved);
-  };
+  }, []);
 
   // View mode toggle
   const handleToggleViewMode = () => {
