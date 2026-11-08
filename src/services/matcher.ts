@@ -25,6 +25,9 @@ interface NormalizedJobFields {
 
 const JOB_FIELDS_CACHE = new WeakMap<JobPosting, NormalizedJobFields>();
 
+const ELECTRONICS_KEYWORDS = ['elektronik', 'elektrik', 'mekatronik', 'otomasyon', 'haberlesme'];
+const CS_KEYWORDS = ['bilgisayar', 'bilisim', 'yazilim', 'programcilik', 'donanim'];
+
 function getProfessionContext(userProfession: string): ProfessionContext {
   const cached = PROFESSION_CONTEXT_CACHE.get(userProfession);
   if (cached) return cached;
@@ -529,6 +532,11 @@ export function evaluateJobMatch(job: JobPosting, criteria: UserCriteria): Match
       reason: 'Bölüm filtresi seçilmedi'
     });
   } else {
+    const userDeptAndProfTokens = (userDeptNorm + ' ' + userProfNorm).split(/[\s,/-]+/).filter(Boolean);
+    const isUserElectronics = ELECTRONICS_KEYWORDS.some(k => userDeptNorm.includes(k));
+    const isUserCs = CS_KEYWORDS.some(k => userDeptNorm.includes(k) || userProfNorm.includes(k)) ||
+                     userDeptAndProfTokens.some(t => t === 'it' || t === 'bt');
+
     for (const allowedNorm of jobFields.allowedDepartments) {
       if (allowedNorm.includes('alan ayrımı olmaksızın') || allowedNorm.includes('fark etmez') || allowedNorm.includes('tum bolumler') || allowedNorm.includes('ilgili bolum')) {
         deptMatch = true;
@@ -543,21 +551,15 @@ export function evaluateJobMatch(job: JobPosting, criteria: UserCriteria): Match
         deptMatch = true;
         break;
       }
-      // Benzer teknik alanlar (elektronik / otomasyon)
-      const electronicsKeywords = ['elektronik', 'elektrik', 'mekatronik', 'otomasyon', 'haberlesme'];
-      const isUserElectronics = electronicsKeywords.some(k => userDeptNorm.includes(k));
-      const isJobElectronics = electronicsKeywords.some(k => allowedNorm.includes(k));
+
+      const isJobElectronics = ELECTRONICS_KEYWORDS.some(k => allowedNorm.includes(k));
       if (isUserElectronics && isJobElectronics) {
         partialDept = true;
       }
 
       // Benzer bilişim alanları (bilgisayar / yazılım / donanım)
-      const csKeywords = ['bilgisayar', 'bilisim', 'yazilim', 'programcilik', 'donanim'];
-      const userTokens = (userDeptNorm + ' ' + userProfNorm).split(/[\s,/-]+/);
-      const isUserCs = csKeywords.some(k => userDeptNorm.includes(k) || userProfNorm.includes(k)) ||
-                       userTokens.some(t => t === 'it' || t === 'bt');
       const jobTokens = allowedNorm.split(/[\s,/-]+/);
-      const isJobCs = csKeywords.some(k => allowedNorm.includes(k)) ||
+      const isJobCs = CS_KEYWORDS.some(k => allowedNorm.includes(k)) ||
                       jobTokens.some(t => t === 'it' || t === 'bt');
       if (isUserCs && isJobCs) {
         partialDept = true;
