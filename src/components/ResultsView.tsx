@@ -52,8 +52,8 @@ const LIVE_SEARCH_CACHE = new Map<string, LiveSearchCacheEntry>();
 const LIVE_SEARCH_CACHE_TTL = 30_000;
 const LIVE_SEARCH_CACHE_MAX = 8;
 
-const getLiveSearchCacheKey = (profession: string, city: string): string =>
-  `${profession.trim().toLocaleLowerCase('tr-TR')}|${city.trim().toLocaleLowerCase('tr-TR')}`;
+const getLiveSearchCacheKey = (criteria: UserCriteria): string =>
+  JSON.stringify(criteria);
 
 const setLiveSearchCache = (key: string, results: MatchResult[]): void => {
   LIVE_SEARCH_CACHE.delete(key);
