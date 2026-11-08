@@ -66,6 +66,7 @@ const VirtualJobList: React.FC<VirtualJobListProps> = ({ items, savedJobIdSet, o
   const [viewport, setViewport] = useState({ scrollTop: 0, height: 600 });
   const itemsRef = useRef(items);
   itemsRef.current = items;
+  const layoutUpdateFrameRef = useRef<number | null>(null);
 
   const rebuildOffsets = useCallback(() => {
     const currentItems = itemsRef.current;
@@ -86,11 +87,25 @@ const VirtualJobList: React.FC<VirtualJobListProps> = ({ items, savedJobIdSet, o
     [items, getRowKey]
   );
 
+  const scheduleLayoutUpdate = useCallback(() => {
+    if (layoutUpdateFrameRef.current !== null) return;
+
+    layoutUpdateFrameRef.current = requestAnimationFrame(() => {
+      layoutUpdateFrameRef.current = null;
+      rebuildOffsets();
+      setViewport(current => ({ ...current }));
+    });
+  }, [rebuildOffsets]);
+
   useEffect(() => {
     rowObserverRef.current?.disconnect();
     rowObserverRef.current = null;
     rowIndexByNodeRef.current.clear();
     rowNodeByIndexRef.current.clear();
+    if (layoutUpdateFrameRef.current !== null) {
+      cancelAnimationFrame(layoutUpdateFrameRef.current);
+      layoutUpdateFrameRef.current = null;
+    }
     rebuildOffsets();
 
     const el = containerRef.current;
@@ -178,8 +193,7 @@ const VirtualJobList: React.FC<VirtualJobListProps> = ({ items, savedJobIdSet, o
         }
 
         if (changed) {
-          rebuildOffsets();
-          setViewport(current => ({ ...current }));
+          scheduleLayoutUpdate();
         }
       });
     }
@@ -192,12 +206,11 @@ const VirtualJobList: React.FC<VirtualJobListProps> = ({ items, savedJobIdSet, o
     const previous = heightCacheRef.current.get(rowKey) || ESTIMATED_CARD_HEIGHT;
     if (Math.abs(previous - initialHeight) >= 1) {
       heightCacheRef.current.set(rowKey, initialHeight);
-      rebuildOffsets();
-      setViewport(current => ({ ...current }));
+      scheduleLayoutUpdate();
     }
 
     rowObserverRef.current.observe(node);
-  }, [getRowKey, rebuildOffsets]);
+  }, [getRowKey, rebuildOffsets, scheduleLayoutUpdate]);
 
   const rowRefCallbacksRef = useRef<Map<number, (node: HTMLDivElement | null) => void>>(new Map());
 
@@ -212,6 +225,10 @@ const VirtualJobList: React.FC<VirtualJobListProps> = ({ items, savedJobIdSet, o
 
   useEffect(() => {
     return () => {
+      if (layoutUpdateFrameRef.current !== null) {
+        cancelAnimationFrame(layoutUpdateFrameRef.current);
+        layoutUpdateFrameRef.current = null;
+      }
       rowObserverRef.current?.disconnect();
       rowObserverRef.current = null;
       rowIndexByNodeRef.current.clear();
