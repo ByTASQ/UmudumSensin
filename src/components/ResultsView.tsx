@@ -53,28 +53,31 @@ const VIRTUAL_OVERSCAN = 6;
 
 const VirtualJobList: React.FC<VirtualJobListProps> = ({ items, savedJobIdSet, onToggleSave }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const heightsRef = useRef<number[]>([]);
+  const heightCacheRef = useRef<Map<string, number>>(new Map());
   const offsetsRef = useRef<number[]>([]);
   const rowObserversRef = useRef<Map<number, ResizeObserver>>(new Map());
+
+  const getRowKey = useCallback((result: MatchResult) => {
+    return `${result.job.id}-${result.job.sourceId || ''}`;
+  }, []);
   const [viewport, setViewport] = useState({ scrollTop: 0, height: 600 });
 
   const rebuildOffsets = useCallback(() => {
     const offsets = new Array(items.length + 1);
-    const heights = heightsRef.current;
     let total = 0;
 
     for (let i = 0; i < items.length; i++) {
+      const height = heightCacheRef.current.get(getRowKey(items[i])) || ESTIMATED_CARD_HEIGHT;
       offsets[i] = total;
-      total += heights[i] || ESTIMATED_CARD_HEIGHT;
+      total += height;
     }
     offsets[items.length] = total;
     offsetsRef.current = offsets;
-  }, [items.length]);
+  }, [items, getRowKey]);
 
   useEffect(() => {
     rowObserversRef.current.forEach(observer => observer.disconnect());
     rowObserversRef.current.clear();
-    heightsRef.current = new Array(items.length);
     rebuildOffsets();
 
     const el = containerRef.current;
@@ -103,7 +106,7 @@ const VirtualJobList: React.FC<VirtualJobListProps> = ({ items, savedJobIdSet, o
       el.removeEventListener('scroll', onScroll);
       resizeObserver.disconnect();
     };
-  }, [items.length, rebuildOffsets]);
+  }, [items, rebuildOffsets]);
 
   const findStartIndex = (scrollTop: number) => {
     const offsets = offsetsRef.current;
@@ -133,10 +136,13 @@ const VirtualJobList: React.FC<VirtualJobListProps> = ({ items, savedJobIdSet, o
 
     const measure = () => {
       const height = node.getBoundingClientRect().height;
-      const previous = heightsRef.current[index] || ESTIMATED_CARD_HEIGHT;
+      const result = items[index];
+      if (!result) return;
+      const rowKey = getRowKey(result);
+      const previous = heightCacheRef.current.get(rowKey) || ESTIMATED_CARD_HEIGHT;
       if (Math.abs(previous - height) < 1) return;
 
-      heightsRef.current[index] = height;
+      heightCacheRef.current.set(rowKey, height);
       rebuildOffsets();
       setViewport(current => ({ ...current }));
     };
@@ -145,7 +151,7 @@ const VirtualJobList: React.FC<VirtualJobListProps> = ({ items, savedJobIdSet, o
     const observer = new ResizeObserver(measure);
     observer.observe(node);
     rowObserversRef.current.set(index, observer);
-  }, [rebuildOffsets]);
+  }, [items, getRowKey, rebuildOffsets]);
 
   useEffect(() => {
     return () => {
