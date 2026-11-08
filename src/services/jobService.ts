@@ -7,6 +7,15 @@ import { normalizeTurkish, checkProfessionMatch, isEngineerJob } from './matcher
 import { getCityInfo } from '../utils/cityUtils';
 import { DEFAULT_SOURCES } from '../sources/sourceRegistry';
 
+// Dynamic job generation is CPU-heavy because it normalizes and evaluates a
+// large static pool. Keep a short-lived cache so repeated scans with the same
+// criteria do not rebuild the entire pool.
+const JOB_POOL_CACHE = new Map<string, { expiresAt: number; jobs: JobPosting[] }>();
+const JOB_POOL_CACHE_TTL_MS = 30_000;
+const JOB_POOL_CACHE_LIMIT = 12;
+const PROFESSION_RECOGNITION_CACHE = new Map<string, boolean>();
+const PROFESSION_RECOGNITION_CACHE_LIMIT = 256;
+
 /**
  * Kullanıcının yazdığı kelimenin gerçek bir meslek, bölüm, sektör veya kadro unvanı
  * olup olmadığını doğrular.
@@ -17,7 +26,12 @@ export function isRecognizedProfession(query?: string): boolean {
   if (!query || !query.trim()) return true;
   const trimmed = query.trim();
   if (trimmed.length < 2) return false;
-  const norm = normalizeTurkish(trimmed);
+
+  const cacheKey = normalizeTurkish(trimmed);
+  const cached = PROFESSION_RECOGNITION_CACHE.get(cacheKey);
+  if (cached !== undefined) return cached;
+
+  const norm = cacheKey;
 
   // 1. ALL_PROFESSIONS listesinde tam veya alt küme eşleşme
   for (const prof of ALL_PROFESSIONS) {
@@ -72,7 +86,13 @@ export function isRecognizedProfession(query?: string): boolean {
     return true;
   }
 
-  return false;
+  const result = false;
+  if (PROFESSION_RECOGNITION_CACHE.size >= PROFESSION_RECOGNITION_CACHE_LIMIT) {
+    const oldestKey = PROFESSION_RECOGNITION_CACHE.keys().next().value;
+    if (oldestKey !== undefined) PROFESSION_RECOGNITION_CACHE.delete(oldestKey);
+  }
+  PROFESSION_RECOGNITION_CACHE.set(cacheKey, result);
+  return result;
 }
 
 /**
@@ -107,6 +127,17 @@ export function generateDynamicJobPool(
 ): JobPosting[] {
   const safeSources = Array.isArray(sources) && sources.length > 0 ? sources : DEFAULT_SOURCES;
   const rawProfession = criteria.profession?.trim() || '';
+
+  const cacheKey = JSON.stringify({
+    criteria,
+    enabledSources: safeSources.filter(s => s.enabled).map(s => s.id).sort()
+  });
+  const now = Date.now();
+  const cachedPool = JOB_POOL_CACHE.get(cacheKey);
+  if (cachedPool && cachedPool.expiresAt > now) {
+    return cachedPool.jobs;
+  }
+  if (cachedPool) JOB_POOL_CACHE.delete(cacheKey);
 
   // KULLANICI KURALI: Eğer kullanıcı bir unvan yazmışsa ve bu unvan gerçek bir meslek/kadro değilse
   // (Örn: rastgele harfler "hukloıjkıuh", "asdfgh"), ASLA sahte belediye/kamu ilanları üretilmez!
@@ -1865,6 +1896,15 @@ export function generateDynamicJobPool(
       uniqueJobs.push(job);
     }
   }
+
+  if (JOB_POOL_CACHE.size >= JOB_POOL_CACHE_LIMIT) {
+    const oldestKey = JOB_POOL_CACHE.keys().next().value;
+    if (oldestKey !== undefined) JOB_POOL_CACHE.delete(oldestKey);
+  }
+  JOB_POOL_CACHE.set(cacheKey, {
+    expiresAt: now + JOB_POOL_CACHE_TTL_MS,
+    jobs: uniqueJobs
+  });
 
   return uniqueJobs;
 }
