@@ -45,7 +45,7 @@ const JOB_SPECIFIC_URL_CACHE = new WeakMap<JobPosting, boolean>();
 
 interface LiveSearchCacheEntry {
   expiresAt: number;
-  results: MatchResult[];
+  results: JobPosting[];
 }
 
 const LIVE_SEARCH_CACHE = new Map<string, LiveSearchCacheEntry>();
@@ -53,9 +53,9 @@ const LIVE_SEARCH_CACHE_TTL = 30_000;
 const LIVE_SEARCH_CACHE_MAX = 8;
 
 const getLiveSearchCacheKey = (criteria: UserCriteria): string =>
-  JSON.stringify(criteria);
+  `${criteria.profession.trim()}\u0001${criteria.city || ''}`;
 
-const setLiveSearchCache = (key: string, results: MatchResult[]): void => {
+const setLiveSearchCache = (key: string, results: JobPosting[]): void => {
   LIVE_SEARCH_CACHE.delete(key);
   LIVE_SEARCH_CACHE.set(key, {
     expiresAt: Date.now() + LIVE_SEARCH_CACHE_TTL,
@@ -321,12 +321,14 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
   const [sourceFilter, setSourceFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const deferredSearchQuery = useDeferredValue(searchQuery);
-  const [liveResults, setLiveResults] = useState<MatchResult[]>([]);
+  const [liveJobs, setLiveJobs] = useState<JobPosting[]>([]);
 
-  // Dynamically fetch fresh live individual jobs from backend
+  // Dynamically fetch fresh live individual jobs from backend.
+  // Cache the raw jobs by profession/city; matching is recalculated locally
+  // when other criteria (age, education, KPSS, etc.) change.
   useEffect(() => {
     if (!criteria.profession) {
-      setLiveResults([]);
+      setLiveJobs([]);
       return;
     }
 
@@ -334,7 +336,7 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
     const cacheKey = getLiveSearchCacheKey(criteria);
     const cached = LIVE_SEARCH_CACHE.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) {
-      setLiveResults(cached.results);
+      setLiveJobs(cached.results);
       return () => controller.abort();
     }
     if (cached) LIVE_SEARCH_CACHE.delete(cacheKey);
@@ -346,9 +348,9 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
         .then(res => res.json())
         .then(data => {
           if (Array.isArray(data.jobs)) {
-            const mapped = data.jobs.map((j: JobPosting) => evaluateJobMatch(j, criteria));
-            setLiveSearchCache(cacheKey, mapped);
-            setLiveResults(mapped);
+            const jobs = data.jobs as JobPosting[];
+            setLiveSearchCache(cacheKey, jobs);
+            setLiveJobs(jobs);
           }
         })
         .catch(() => {});
@@ -359,6 +361,11 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
       controller.abort();
     };
   }, [criteria.profession, criteria.city]);
+
+  const liveResults = useMemo(
+    () => liveJobs.map(job => evaluateJobMatch(job, criteria)),
+    [liveJobs, criteria]
+  );
 
   // Merge live jobs with initial pool
   const allMergedResults = useMemo(() => {
