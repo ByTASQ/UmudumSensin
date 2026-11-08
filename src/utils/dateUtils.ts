@@ -6,6 +6,8 @@
 
 import { JobPosting } from '../types/job';
 
+const ACTIVE_JOB_CACHE = new WeakMap<JobPosting, { dayKey: number; active: boolean }>();
+
 const TURKISH_MONTHS: Record<string, number> = {
   'ocak': 0,
   'subat': 1,
@@ -121,6 +123,12 @@ export function parseJobDeadlineDate(deadlineStr: string): Date | null {
 export function isJobActive(job: JobPosting, referenceDate: Date = new Date()): boolean {
   if (!job) return false;
 
+  // İlanın aktiflik sonucu aynı gün içinde değişmez. Özellikle ResultsView
+  // filtre zincirinde aynı ilanı tekrar tekrar parse etmeyi önler.
+  const dayKey = Math.floor(referenceDate.getTime() / 86400000);
+  const cached = ACTIVE_JOB_CACHE.get(job);
+  if (cached?.dayKey === dayKey) return cached.active;
+
   // Açıkça süresi dolmuş veya kapatılmış bayrakları
   if ((job as any).isExpired === true || (job as any).isClosed === true) {
     return false;
@@ -169,11 +177,14 @@ export function isJobActive(job: JobPosting, referenceDate: Date = new Date()): 
   const deadline = parseJobDeadlineDate(job.deadlineDate);
   if (!deadline) {
     // Son başvuru tarihi ayrıştırılamıyorsa varsayılan olarak aktif kabul et
+    ACTIVE_JOB_CACHE.set(job, { dayKey, active: true });
     return true;
   }
 
   // Son başvuru günü 23:59:59'a kadar aktif kalır
-  return deadline.getTime() >= referenceDate.getTime();
+  const active = deadline.getTime() >= referenceDate.getTime();
+  ACTIVE_JOB_CACHE.set(job, { dayKey, active });
+  return active;
 }
 
 /**
