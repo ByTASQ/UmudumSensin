@@ -19,6 +19,28 @@ import { isJobActive } from '../utils/dateUtils';
 import { isSpecificJobUrl } from '../services/preciseSearchService';
 
 const JOB_CITY_NORMALIZED_CACHE = new WeakMap<JobPosting, string>();
+const JOB_SEARCH_FIELDS_CACHE = new WeakMap<JobPosting, {
+  title: string;
+  company: string;
+  city: string;
+  domain: string;
+}>();
+
+const getJobSearchFields = (job: JobPosting) => {
+  const cached = JOB_SEARCH_FIELDS_CACHE.get(job);
+  if (cached) return cached;
+
+  const fields = {
+    title: (job.title || '').toLocaleLowerCase('tr-TR'),
+    company: (job.company || '').toLocaleLowerCase('tr-TR'),
+    city: (job.city || '').toLocaleLowerCase('tr-TR'),
+    domain: (job.sourceDomain || '').toLocaleLowerCase('tr-TR')
+  };
+  JOB_SEARCH_FIELDS_CACHE.set(job, fields);
+  return fields;
+};
+
+const JOB_NEWS_CACHE = new WeakMap<JobPosting, boolean>();
 
 interface VirtualJobListProps {
   items: MatchResult[];
@@ -192,21 +214,30 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
 
   // Dynamically fetch fresh live individual jobs from backend
   useEffect(() => {
-    if (!criteria.profession) return;
-    const controller = new AbortController();
-    fetch(`/api/live-search-jobs?profession=${encodeURIComponent(criteria.profession)}&city=${encodeURIComponent(criteria.city || '')}`, {
-      signal: controller.signal
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data.jobs) && data.jobs.length > 0) {
-          const mapped = data.jobs.map((j: JobPosting) => evaluateJobMatch(j, criteria));
-          setLiveResults(mapped);
-        }
-      })
-      .catch(() => {});
+    if (!criteria.profession) {
+      setLiveResults([]);
+      return;
+    }
 
-    return () => controller.abort();
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      fetch(`/api/live-search-jobs?profession=${encodeURIComponent(criteria.profession)}&city=${encodeURIComponent(criteria.city || '')}`, {
+        signal: controller.signal
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (Array.isArray(data.jobs)) {
+            const mapped = data.jobs.map((j: JobPosting) => evaluateJobMatch(j, criteria));
+            setLiveResults(mapped);
+          }
+        })
+        .catch(() => {});
+    }, 350);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
   }, [criteria.profession, criteria.city]);
 
   // Merge live jobs with initial pool
@@ -263,6 +294,8 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
 
   // Memurlar.net ve tüm haber bülteni/rehber içeriklerini kesin olarak haber tanımla
   const isNewsJob = (job: JobPosting): boolean => {
+    const cached = JOB_NEWS_CACHE.get(job);
+    if (cached !== undefined) return cached;
     const domainLower = (job.sourceDomain || '').toLowerCase();
     const urlLower = (job.originalUrl || '').toLowerCase();
     const sourceIdLower = (job.sourceId || '').toLowerCase();
@@ -283,7 +316,9 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
       titleLower.includes('haber bülteni') ||
       titleLower.includes('son dakika:');
 
-    return isMemurlar || isPureInformational;
+    const result = isMemurlar || isPureInformational;
+    JOB_NEWS_CACHE.set(job, result);
+    return result;
   };
 
   const savedJobIdSet = useMemo(() => new Set(savedJobIds), [savedJobIds]);
@@ -386,11 +421,13 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
       // Search query
       if (normalizedSearchQuery) {
         const q = normalizedSearchQuery;
-        const matchTitle = res.job.title.toLowerCase().includes(q);
-        const matchCompany = res.job.company.toLowerCase().includes(q);
-        const matchCity = res.job.city.toLowerCase().includes(q);
-        const matchDomain = res.job.sourceDomain ? res.job.sourceDomain.toLowerCase().includes(q) : false;
-        if (!matchTitle && !matchCompany && !matchCity && !matchDomain) return false;
+        const fields = getJobSearchFields(res.job);
+        if (
+          !fields.title.includes(q) &&
+          !fields.company.includes(q) &&
+          !fields.city.includes(q) &&
+          !fields.domain.includes(q)
+        ) return false;
       }
 
       return true;
@@ -589,7 +626,7 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
       </div>
 
       {/* 3. İLAN LİSTESİ - Sade, Tam Genişlik ve Doğrudan İlana Geçiş */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 min-h-0">
         {filteredResults.length === 0 ? (
           <div className="p-8 max-w-lg mx-auto text-center space-y-3">
             <div className="w-12 h-12 rounded-2xl bg-purple-100 dark:bg-purple-950/70 border border-purple-200 dark:border-purple-800 flex items-center justify-center mx-auto text-purple-600 dark:text-purple-400">
