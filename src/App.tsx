@@ -148,7 +148,7 @@ export default function App() {
     return evaluated;
   };
 
-  const handleToggleSector = (sector: 'kamu' | 'ozel') => {
+  const handleToggleSector = useCallback((sector: 'kamu' | 'ozel') => {
     const currentPublic = criteria.includePublic ?? (criteria.onlyPublicJobs !== false);
     const currentPrivate = criteria.includePrivate ?? (!criteria.onlyPublicJobs);
 
@@ -175,7 +175,7 @@ export default function App() {
     };
 
     handleCriteriaChange(nextCriteria);
-  };
+  }, [criteria, handleCriteriaChange]);
 
   // Matching is handled by the debounced criteria/source effect above.
   // allJobs is local cached data and is not needed as a trigger because the
@@ -183,7 +183,7 @@ export default function App() {
 
   const handleStartScan = useCallback(() => {
     setIsScanning(true);
-  };
+  }, []);
 
   const handleScanAnimationComplete = useCallback(() => {
     setIsScanning(false);
@@ -287,13 +287,13 @@ export default function App() {
         viewMode={viewMode}
         isDarkMode={isDarkMode}
         currentTab={currentTab}
-        onTabChange={(tab) => setCurrentTab(tab)}
+        onTabChange={setCurrentTab}
         resultsCount={eligibleResultsCount}
         onToggleDarkMode={handleToggleTheme}
         includePublic={criteria.includePublic ?? (criteria.onlyPublicJobs !== false)}
         includePrivate={criteria.includePrivate ?? (!criteria.onlyPublicJobs)}
         onToggleViewMode={handleToggleViewMode}
-        onNavigateToSources={() => setCurrentTab('sources')}
+        onNavigateToSources={useCallback(() => setCurrentTab('sources'), [])}
         onToggleSector={handleToggleSector}
       />
 
@@ -316,7 +316,7 @@ export default function App() {
             sources={sources}
             savedJobIds={savedJobIds}
             onToggleSave={handleToggleSaveJob}
-            onNewScan={() => setCurrentTab('scan')}
+            onNewScan={useCallback(() => setCurrentTab('scan'), [])}
             onToggleSector={handleToggleSector}
           />
         )}
