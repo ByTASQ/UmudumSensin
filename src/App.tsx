@@ -245,6 +245,14 @@ export default function App() {
     saveViewMode(nextMode);
   }, [viewMode]);
 
+  const handleNavigateToSources = useCallback(() => {
+    setCurrentTab('sources');
+  }, []);
+
+  const handleNavigateToScan = useCallback(() => {
+    setCurrentTab('scan');
+  }, []);
+
   const { activeSourcesCount, eligibleResultsCount, publicEligibleResultsCount } = useMemo(() => {
     let activeSourcesCount = 0;
     let eligibleResultsCount = 0;
@@ -293,7 +301,7 @@ export default function App() {
         includePublic={criteria.includePublic ?? (criteria.onlyPublicJobs !== false)}
         includePrivate={criteria.includePrivate ?? (!criteria.onlyPublicJobs)}
         onToggleViewMode={handleToggleViewMode}
-        onNavigateToSources={useCallback(() => setCurrentTab('sources'), [])}
+        onNavigateToSources={handleNavigateToSources}
         onToggleSector={handleToggleSector}
       />
 
@@ -316,7 +324,7 @@ export default function App() {
             sources={sources}
             savedJobIds={savedJobIds}
             onToggleSave={handleToggleSaveJob}
-            onNewScan={useCallback(() => setCurrentTab('scan'), [])}
+            onNewScan={handleNavigateToScan}
             onToggleSector={handleToggleSector}
           />
         )}
