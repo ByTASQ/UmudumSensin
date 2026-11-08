@@ -1,7 +1,17 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useDeferredValue } from 'react';
 import { SuggestionItem } from '../data/professionsAndDepartments';
 import { normalizeTurkish } from '../services/matcher';
 import { X, ChevronDown, Check } from 'lucide-react';
+
+const SUGGESTION_NORMALIZED_CACHE = new WeakMap<SuggestionItem, string>();
+
+const getNormalizedSuggestionName = (item: SuggestionItem): string => {
+  const cached = SUGGESTION_NORMALIZED_CACHE.get(item);
+  if (cached !== undefined) return cached;
+  const normalized = normalizeTurkish(item.name);
+  SUGGESTION_NORMALIZED_CACHE.set(item, normalized);
+  return normalized;
+};
 
 interface SearchableSuggestInputProps {
   label: string;
@@ -31,6 +41,7 @@ export const SearchableSuggestInput: React.FC<SearchableSuggestInputProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const deferredValue = useDeferredValue(value);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -52,7 +63,7 @@ export const SearchableSuggestInput: React.FC<SearchableSuggestInputProps> = ({
 
   // Filter items based on normalized query
   const filteredSuggestions = useMemo(() => {
-    const query = normalizeTurkish(value.trim());
+    const query = normalizeTurkish(deferredValue.trim());
     const queryTokens = query.split(/\s+/).filter(Boolean);
 
     if (!query) {
@@ -66,7 +77,7 @@ export const SearchableSuggestInput: React.FC<SearchableSuggestInputProps> = ({
     const includesAnyToken: SuggestionItem[] = [];
 
     for (const item of items) {
-      const itemNorm = normalizeTurkish(item.name);
+      const itemNorm = getNormalizedSuggestionName(item);
 
       if (itemNorm === query) {
         exactMatch.push(item);
@@ -80,7 +91,7 @@ export const SearchableSuggestInput: React.FC<SearchableSuggestInputProps> = ({
     }
 
     return [...exactMatch, ...startsWith, ...includesAllTokens, ...includesAnyToken].slice(0, 30);
-  }, [items, value]);
+  }, [items, deferredValue]);
 
   const handleSelect = (name: string) => {
     onChange(name);
