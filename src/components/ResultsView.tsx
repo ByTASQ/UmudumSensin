@@ -308,7 +308,7 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
 
   // Extract jobs for status handling on cards
   const allInitialJobs = useMemo(() => allMergedResults.map(r => r.job), [allMergedResults]);
-  const { getJobStatus } = useLinkVerification(allInitialJobs);
+  const { getJobStatus, verificationVersion } = useLinkVerification(allInitialJobs);
 
   // Bir ilanın linkinin 404/kırık veya başvuru süresi dolmuş/yayından kaldırılmış olup olmadığını denetle
   const isJobLinkBroken = (job: JobPosting): boolean => {
@@ -349,7 +349,7 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
       isSpecificJobUrl(r.job.originalUrl) &&
       isJobCityMatching(r.job)
     );
-  }, [allMergedResults, getJobStatus, isCityFilterActive, userCityNorm]);
+  }, [allMergedResults, verificationVersion, isCityFilterActive, userCityNorm]);
 
   // Memurlar.net ve tüm haber bülteni/rehber içeriklerini kesin olarak haber tanımla
   const isNewsJob = (job: JobPosting): boolean => {
