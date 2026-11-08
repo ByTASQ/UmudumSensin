@@ -40,6 +40,8 @@ const MATCH_EXECUTION_CACHE = new WeakMap<
   WeakMap<JobSource[], MatchResult[]>
 >();
 
+const ENABLED_SOURCE_IDS_CACHE = new WeakMap<JobSource[], Set<string>>();
+
 export default function App() {
   const [criteria, setCriteria] = useState<UserCriteria>(loadSavedCriteria);
   const [sources, setSources] = useState<JobSource[]>(loadSources);
@@ -61,11 +63,11 @@ export default function App() {
     }
   }, [themeMode]);
 
-  const handleToggleTheme = () => {
+  const handleToggleTheme = useCallback(() => {
     const next = themeMode === 'dark' ? 'light' : 'dark';
     setThemeMode(next);
     saveThemeMode(next);
-  };
+  }, [themeMode]);
 
   // Sync criteria to local storage.
   // Matching is debounced because ScanForm can emit multiple changes while
@@ -79,10 +81,10 @@ export default function App() {
     return () => window.clearTimeout(timer);
   }, [criteria, sources]);
 
-  const handleCriteriaChange = (newCriteria: UserCriteria) => {
+  const handleCriteriaChange = useCallback((newCriteria: UserCriteria) => {
     setCriteria(newCriteria);
     saveLastCriteria(newCriteria);
-  };
+  }, []);
 
   // Perform the match analysis
   const executeMatch = (targetCriteria: UserCriteria) => {
@@ -100,7 +102,11 @@ export default function App() {
 
     // Generate authentic, dynamic job postings tailored to the user's specific profession, city & sources
     const dynamicPool = generateDynamicJobPool(targetCriteria, sources);
-    const enabledSourceIds = new Set(sources.filter(s => s.enabled).map(s => s.id));
+    let enabledSourceIds = ENABLED_SOURCE_IDS_CACHE.get(sources);
+    if (!enabledSourceIds) {
+      enabledSourceIds = new Set(sources.filter(s => s.enabled).map(s => s.id));
+      ENABLED_SOURCE_IDS_CACHE.set(sources, enabledSourceIds);
+    }
     if (enabledSourceIds.has('kariyer_kapisi')) enabledSourceIds.add('cbiko');
     if (enabledSourceIds.has('iskur')) enabledSourceIds.add('iskur_kamu');
     if (enabledSourceIds.has('memurlar_net')) enabledSourceIds.add('memurlar');
@@ -175,11 +181,11 @@ export default function App() {
   // allJobs is local cached data and is not needed as a trigger because the
   // current matching pool is generated from the active criteria and sources.
 
-  const handleStartScan = () => {
+  const handleStartScan = useCallback(() => {
     setIsScanning(true);
   };
 
-  const handleScanAnimationComplete = () => {
+  const handleScanAnimationComplete = useCallback(() => {
     setIsScanning(false);
     const evaluated = executeMatch(criteria);
     setCurrentTab('results');
@@ -190,32 +196,32 @@ export default function App() {
     if (eligibleJobs.length > 0) {
       markJobIdsAsSeen(eligibleJobs.map(j => j.id));
     }
-  };
+  }, [criteria]);
 
-  const handleOpenJobDetailById = (_jobId: string) => {
+  const handleOpenJobDetailById = useCallback((_jobId: string) => {
     setCurrentTab('results');
-  };
+  }, []);
 
   // Source management
-  const handleToggleSource = (id: string) => {
+  const handleToggleSource = useCallback((id: string) => {
     const updated = sources.map(s => s.id === id ? { ...s, enabled: !s.enabled } : s);
     setSources(updated);
     saveSources(updated);
-  };
+  }, [sources]);
 
-  const handleAddCustomSource = (newSource: JobSource) => {
+  const handleAddCustomSource = useCallback((newSource: JobSource) => {
     const updated = [newSource, ...sources];
     setSources(updated);
     saveSources(updated);
-  };
+  }, [sources]);
 
-  const handleDeleteCustomSource = (id: string) => {
+  const handleDeleteCustomSource = useCallback((id: string) => {
     const updated = sources.filter(s => s.id !== id);
     setSources(updated);
     saveSources(updated);
-  };
+  }, [sources]);
 
-  const handleRefreshSourceStatuses = () => {
+  const handleRefreshSourceStatuses = useCallback(() => {
     const updated = sources.map(s => ({
       ...s,
       status: 'online' as const,
@@ -224,7 +230,7 @@ export default function App() {
     }));
     setSources(updated);
     saveSources(updated);
-  };
+  }, [sources]);
 
   // Saved bookmark toggling
   const handleToggleSaveJob = useCallback((jobId: string) => {
@@ -233,11 +239,11 @@ export default function App() {
   }, []);
 
   // View mode toggle
-  const handleToggleViewMode = () => {
+  const handleToggleViewMode = useCallback(() => {
     const nextMode = viewMode === 'android' ? 'full' : 'android';
     setViewMode(nextMode);
     saveViewMode(nextMode);
-  };
+  }, [viewMode]);
 
   const { activeSourcesCount, eligibleResultsCount, publicEligibleResultsCount } = useMemo(() => {
     let activeSourcesCount = 0;
