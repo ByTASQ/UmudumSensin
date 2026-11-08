@@ -85,7 +85,7 @@ export const ScanForm: React.FC<ScanFormProps> = ({
         className="w-full flex flex-col"
       >
         {/* 1. SEKTÖR SEÇİM ÇUBUĞU - Yatayda Tam Ekran, Yüksek Okunabilirlik ve Şık Segmented Tasarım */}
-        <section className="w-full px-4 sm:px-8 xl:px-12 py-3.5 border-b border-purple-200/50 dark:border-purple-900/40 bg-white/60 dark:bg-slate-900/60 backdrop-blur-md">
+        <section className="w-full px-4 sm:px-8 xl:px-12 py-3.5 border-b border-purple-200/50 dark:border-purple-900/40 bg-white/60 dark:bg-slate-900/60">
           <div className="w-full max-w-2xl grid grid-cols-3 gap-2 sm:gap-3">
             {/* 1. Kamu */}
             <button
@@ -141,7 +141,7 @@ export const ScanForm: React.FC<ScanFormProps> = ({
         </section>
 
         {/* 2. TEMEL KRİTERLER FORMU - Yatayda Tam Ekran Grid, Sadece İnce Çizgilerle Ayrılmış */}
-        <section className="relative z-20 w-full px-4 sm:px-8 xl:px-12 py-6 border-b border-purple-200/50 dark:border-purple-900/40 bg-white/20 dark:bg-slate-950/20 backdrop-blur-[2px]">
+        <section className="relative z-20 w-full px-4 sm:px-8 xl:px-12 py-6 border-b border-purple-200/50 dark:border-purple-900/40 bg-white/20 dark:bg-slate-950/20">
           <div className="w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             
             {/* 1. Meslek / Unvan */}
@@ -331,7 +331,7 @@ export const ScanForm: React.FC<ScanFormProps> = ({
         </section>
 
         {/* 3. ALT ÇUBUK: BÜYÜK TARA BUTONU (Yatayda Tam Ekran) */}
-        <section className="relative z-10 w-full px-4 sm:px-8 xl:px-12 py-5 border-b border-purple-200/50 dark:border-purple-900/40 bg-white/40 dark:bg-slate-950/40 backdrop-blur-xs flex items-center justify-center">
+        <section className="relative z-10 w-full px-4 sm:px-8 xl:px-12 py-5 border-b border-purple-200/50 dark:border-purple-900/40 bg-white/40 dark:bg-slate-950/40 flex items-center justify-center">
           <button
             type="submit"
             className="w-full sm:w-auto min-w-[280px] sm:min-w-[360px] py-4 px-8 bg-purple-600 hover:bg-purple-700 text-white font-black text-sm sm:text-base tracking-wide rounded-2xl shadow-lg shadow-purple-950/25 active:scale-[0.98] transition flex items-center justify-center gap-3 cursor-pointer"
