@@ -24,6 +24,11 @@ const urlCache = new Map<string, { result: UrlCheckResult; timestamp: number }>(
 const CACHE_TTL_MS = 60 * 1000; // 1 minute in memory
 const URL_CHECK_CONCURRENCY = 4;
 
+// Cache completed live-search responses briefly to avoid repeating expensive upstream scraping.
+const LIVE_SEARCH_CACHE_TTL_MS = 30 * 1000;
+const LIVE_SEARCH_CACHE_LIMIT = 32;
+const liveSearchCache = new Map<string, { jobs: any[]; timestamp: number }>();
+
 async function mapWithConcurrency<T, R>(
   items: T[],
   worker: (item: T) => Promise<R>,
@@ -295,8 +300,14 @@ async function startServer() {
     }
 
     try {
-      const { execSync } = await import('child_process');
       const normUserCity = (city || '').toLocaleLowerCase('tr-TR').trim();
+      const liveSearchCacheKey = JSON.stringify({ profession: profession.toLocaleLowerCase('tr-TR'), city: normUserCity });
+      const cachedLiveSearch = liveSearchCache.get(liveSearchCacheKey);
+      if (cachedLiveSearch && Date.now() - cachedLiveSearch.timestamp < LIVE_SEARCH_CACHE_TTL_MS) {
+        return res.json({ jobs: cachedLiveSearch.jobs });
+      }
+
+      const { execSync } = await import('child_process');
       const isUserCityFilterActive = Boolean(
         normUserCity && 
         !normUserCity.includes('tüm') && 
@@ -566,6 +577,13 @@ async function startServer() {
           verifiedJobs.push(job);
         }
       });
+
+      liveSearchCache.set(liveSearchCacheKey, { jobs: verifiedJobs, timestamp: Date.now() });
+      while (liveSearchCache.size > LIVE_SEARCH_CACHE_LIMIT) {
+        const oldestKey = liveSearchCache.keys().next().value;
+        if (!oldestKey) break;
+        liveSearchCache.delete(oldestKey);
+      }
 
       return res.json({ jobs: verifiedJobs });
     } catch (err: any) {
