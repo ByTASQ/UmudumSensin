@@ -17,6 +17,7 @@ import {
 import { useLinkVerification } from '../hooks/useLinkVerification';
 import { isJobActive } from '../utils/dateUtils';
 import { isSpecificJobUrl } from '../services/preciseSearchService';
+import { apiUrl } from '../services/apiConfig';
 
 const JOB_CITY_NORMALIZED_CACHE = new WeakMap<JobPosting, string>();
 const JOB_SEARCH_FIELDS_CACHE = new WeakMap<JobPosting, {
@@ -360,7 +361,7 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
     if (cached) LIVE_SEARCH_CACHE.delete(cacheKey);
 
     const timer = window.setTimeout(() => {
-      fetch(`/api/live-search-jobs?profession=${encodeURIComponent(criteria.profession)}&city=${encodeURIComponent(criteria.city || '')}`, {
+      fetch(apiUrl(`/api/live-search-jobs?profession=${encodeURIComponent(criteria.profession)}&city=${encodeURIComponent(criteria.city || '')}`), {
         signal: controller.signal
       })
         .then(res => res.json())
