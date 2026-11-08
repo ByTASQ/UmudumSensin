@@ -531,11 +531,6 @@ export function evaluateJobMatch(job: JobPosting, criteria: UserCriteria): Match
     if (normReq === 'fark etmez' || normReq.includes('fark etmez')) return true;
     if (normReq === userEduNorm) return true;
 
-    const userIsLise = userEduNorm.includes('lise') || userEduNorm.includes('ortaogretim');
-    const userIsOnlisans = userEduNorm.includes('onlisans');
-    const userIsLisans = !userIsOnlisans && userEduNorm.includes('lisans');
-    const userIsYuksek = userEduNorm.includes('yuksek') || userEduNorm.includes('doktora') || userEduNorm.includes('master');
-
     const reqIsLise = normReq.includes('lise') || normReq.includes('ortaogretim');
     const reqIsOnlisans = normReq.includes('onlisans');
     const reqIsLisans = !reqIsOnlisans && normReq.includes('lisans');
@@ -587,6 +582,15 @@ export function evaluateJobMatch(job: JobPosting, criteria: UserCriteria): Match
       reason: 'Bölüm filtresi seçilmedi'
     });
   } else {
+    const isJobElectronics = jobFields.allowedDepartments.some(allowedNorm =>
+      ELECTRONICS_KEYWORDS.some(k => allowedNorm.includes(k))
+    );
+    const isJobCs = jobFields.allowedDepartments.some(allowedNorm => {
+      const jobTokens = allowedNorm.split(/[\s,/-]+/);
+      return CS_KEYWORDS.some(k => allowedNorm.includes(k)) ||
+             jobTokens.some(t => t === 'it' || t === 'bt');
+    });
+
     for (const allowedNorm of jobFields.allowedDepartments) {
       if (allowedNorm.includes('alan ayrımı olmaksızın') || allowedNorm.includes('fark etmez') || allowedNorm.includes('tum bolumler') || allowedNorm.includes('ilgili bolum')) {
         deptMatch = true;
@@ -602,15 +606,11 @@ export function evaluateJobMatch(job: JobPosting, criteria: UserCriteria): Match
         break;
       }
 
-      const isJobElectronics = ELECTRONICS_KEYWORDS.some(k => allowedNorm.includes(k));
       if (isUserElectronics && isJobElectronics) {
         partialDept = true;
       }
 
       // Benzer bilişim alanları (bilgisayar / yazılım / donanım)
-      const jobTokens = allowedNorm.split(/[\s,/-]+/);
-      const isJobCs = CS_KEYWORDS.some(k => allowedNorm.includes(k)) ||
-                      jobTokens.some(t => t === 'it' || t === 'bt');
       if (isUserCs && isJobCs) {
         partialDept = true;
       }
