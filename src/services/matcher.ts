@@ -6,6 +6,60 @@ import { JobPosting, MatchResult, RequirementCheck, UserCriteria } from '../type
 const NORMALIZE_CACHE = new Map<string, string>();
 const NORMALIZE_CACHE_LIMIT = 4096;
 
+interface ProfessionContext {
+  cleanUserProf: string;
+  userTokens: string[];
+  isMultiWordSpecific: boolean;
+  stems: string[];
+}
+
+const PROFESSION_CONTEXT_CACHE = new Map<string, ProfessionContext>();
+const PROFESSION_CONTEXT_CACHE_LIMIT = 256;
+
+interface NormalizedJobFields {
+  city: string;
+  title: string;
+  allowedDepartments: string[];
+  requiredEducation: string[];
+}
+
+const JOB_FIELDS_CACHE = new WeakMap<JobPosting, NormalizedJobFields>();
+
+function getProfessionContext(userProfession: string): ProfessionContext {
+  const cached = PROFESSION_CONTEXT_CACHE.get(userProfession);
+  if (cached) return cached;
+
+  const cleanUserProf = normalizeTurkish(userProfession).replace(/\([^)]*\)/g, '').trim();
+  const userTokens = cleanUserProf.split(/[\s,/-]+/).filter(t => t.length > 1);
+  const context: ProfessionContext = {
+    cleanUserProf,
+    userTokens,
+    isMultiWordSpecific: userTokens.length >= 2,
+    stems: userTokens.map(getStem)
+  };
+
+  if (PROFESSION_CONTEXT_CACHE.size >= PROFESSION_CONTEXT_CACHE_LIMIT) {
+    const oldestKey = PROFESSION_CONTEXT_CACHE.keys().next().value;
+    if (oldestKey !== undefined) PROFESSION_CONTEXT_CACHE.delete(oldestKey);
+  }
+  PROFESSION_CONTEXT_CACHE.set(userProfession, context);
+  return context;
+}
+
+function getNormalizedJobFields(job: JobPosting): NormalizedJobFields {
+  const cached = JOB_FIELDS_CACHE.get(job);
+  if (cached) return cached;
+
+  const fields: NormalizedJobFields = {
+    city: normalizeTurkish(job.city),
+    title: normalizeTurkish(job.title),
+    allowedDepartments: (job.allowedDepartments || []).map(normalizeTurkish),
+    requiredEducation: (job.requiredEducation || []).map(normalizeTurkish)
+  };
+  JOB_FIELDS_CACHE.set(job, fields);
+  return fields;
+}
+
 export function normalizeTurkish(text?: string | null): string {
   if (!text) return '';
 
@@ -196,15 +250,13 @@ export function checkProfessionMatch(
   const normDepts = (allowedDepartments || []).map(d => normalizeTurkish(d));
   const normDesc = normalizeTurkish(jobDescription || '');
 
-  // Parantez içi temizliği: "Bilgisayar Mühendisi (Yazılım)" -> "bilgisayar muhendisi"
-  const cleanUserProf = normUserProf.replace(/\([^)]*\)/g, '').trim();
-  const userTokens = cleanUserProf.split(/[\s,/-]+/).filter(t => t.length > 1);
+  const context = getProfessionContext(userProfession);
+  const { cleanUserProf, userTokens, isMultiWordSpecific, stems } = context;
   if (userTokens.length === 0) {
     return { isMatch: true, matchType: 'exact', reason: 'Unvan kriteri boş' };
   }
 
   // KULLANICI KURALI 1: Çok kelimeli spesifik unvan (Örn: "Bilgisayar Mühendisi")
-  const isMultiWordSpecific = userTokens.length >= 2;
 
   if (isMultiWordSpecific) {
     const isUserEngineer = cleanUserProf.includes('muhendis');
@@ -303,7 +355,6 @@ export function checkProfessionMatch(
     }
 
     // Unvan kelimelerinin / köklerinin tamamının varlığı
-    const stems = userTokens.map(t => getStem(t));
     const hasAllStemsInTitle = stems.every(stem => normTitle.includes(stem));
     const hasAllStemsInDept = normDepts.some(dept => stems.every(stem => dept.includes(stem)));
     const directPhraseMatch = normTitle.includes(cleanUserProf) || normDepts.some(d => d.includes(cleanUserProf));
@@ -354,7 +405,8 @@ export function evaluateJobMatch(job: JobPosting, criteria: UserCriteria): Match
 
   const userAge = typeof criteria.age === 'number' ? criteria.age : parseInt(String(criteria.age), 10) || 0;
   const userCityNorm = normalizeTurkish(criteria.city);
-  const jobCityNorm = normalizeTurkish(job.city);
+  const jobFields = getNormalizedJobFields(job);
+  const jobCityNorm = jobFields.city;
   const userDeptNorm = normalizeTurkish(criteria.department);
   const userEduNorm = normalizeTurkish(criteria.educationLevel);
   const userProfNorm = normalizeTurkish(criteria.profession);
@@ -417,8 +469,7 @@ export function evaluateJobMatch(job: JobPosting, criteria: UserCriteria): Match
   }
 
   const isEducationFlexible = !criteria.educationLevel || criteria.educationLevel === 'Fark Etmez';
-  const eduMatch = isEducationFlexible || job.requiredEducation.some(edu => {
-    const normReq = normalizeTurkish(edu);
+  const eduMatch = isEducationFlexible || jobFields.requiredEducation.some(normReq => {
     if (normReq === 'fark etmez' || normReq.includes('fark etmez')) return true;
     if (normReq === userEduNorm) return true;
 
@@ -478,8 +529,7 @@ export function evaluateJobMatch(job: JobPosting, criteria: UserCriteria): Match
       reason: 'Bölüm filtresi seçilmedi'
     });
   } else {
-    for (const allowed of job.allowedDepartments) {
-      const allowedNorm = normalizeTurkish(allowed);
+    for (const allowedNorm of jobFields.allowedDepartments) {
       if (allowedNorm.includes('alan ayrımı olmaksızın') || allowedNorm.includes('fark etmez') || allowedNorm.includes('tum bolumler') || allowedNorm.includes('ilgili bolum')) {
         deptMatch = true;
         break;
@@ -515,7 +565,7 @@ export function evaluateJobMatch(job: JobPosting, criteria: UserCriteria): Match
     }
 
     // İlan başlığı aranan unvana tam uyuyorsa bölümü kısmi uygun say
-    const jobTitleNorm = normalizeTurkish(job.title);
+    const jobTitleNorm = jobFields.title;
     if (!deptMatch && !partialDept && userProfNorm && (jobTitleNorm.includes(userProfNorm) || userProfNorm.includes(jobTitleNorm))) {
       partialDept = true;
     }
