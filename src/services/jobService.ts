@@ -22,8 +22,17 @@ const PROFESSION_RECOGNITION_CACHE_LIMIT = 256;
  * Rastgele tuş vuruşları (örn: "hukloıjkıuh", "asdfghjk", "zxcvbnm"), anlamsız metinler
  * veya gerçekte var olmayan meslekler için ASLA sahte belediye/kamu/özel sektör ilanları üretilmez!
  */
+function cacheProfessionRecognition(key: string, result: boolean): boolean {
+  if (PROFESSION_RECOGNITION_CACHE.size >= PROFESSION_RECOGNITION_CACHE_LIMIT) {
+    const oldestKey = PROFESSION_RECOGNITION_CACHE.keys().next().value;
+    if (oldestKey !== undefined) PROFESSION_RECOGNITION_CACHE.delete(oldestKey);
+  }
+  PROFESSION_RECOGNITION_CACHE.set(key, result);
+  return result;
+}
+
 export function isRecognizedProfession(query?: string): boolean {
-  if (!query || !query.trim()) return true;
+  if (!query || !query.trim()) return cacheProfessionRecognition(cacheKey, true);
   const trimmed = query.trim();
   if (trimmed.length < 2) return false;
 
@@ -37,7 +46,7 @@ export function isRecognizedProfession(query?: string): boolean {
   for (const prof of ALL_PROFESSIONS) {
     const profNorm = normalizeTurkish(prof.name);
     if (profNorm === norm || profNorm.startsWith(norm) || (norm.length >= 3 && profNorm.includes(norm))) {
-      return true;
+      return cacheProfessionRecognition(cacheKey, true);
     }
   }
 
@@ -45,7 +54,7 @@ export function isRecognizedProfession(query?: string): boolean {
   for (const dept of ALL_DEPARTMENTS) {
     const deptNorm = normalizeTurkish(dept.name);
     if (deptNorm === norm || deptNorm.startsWith(norm) || (norm.length >= 3 && deptNorm.includes(norm))) {
-      return true;
+      return cacheProfessionRecognition(cacheKey, true);
     }
   }
 
@@ -53,10 +62,10 @@ export function isRecognizedProfession(query?: string): boolean {
   for (const job of INITIAL_JOB_POSTINGS) {
     const titleNorm = normalizeTurkish(job.title);
     if (titleNorm.includes(norm)) {
-      return true;
+      return cacheProfessionRecognition(cacheKey, true);
     }
     if (job.allowedDepartments && job.allowedDepartments.some(d => normalizeTurkish(d).includes(norm))) {
-      return true;
+      return cacheProfessionRecognition(cacheKey, true);
     }
   }
 
@@ -83,16 +92,10 @@ export function isRecognizedProfession(query?: string): boolean {
   ];
 
   if (knownProfessionRoots.some(root => norm.includes(root))) {
-    return true;
+    return cacheProfessionRecognition(cacheKey, true);
   }
 
-  const result = false;
-  if (PROFESSION_RECOGNITION_CACHE.size >= PROFESSION_RECOGNITION_CACHE_LIMIT) {
-    const oldestKey = PROFESSION_RECOGNITION_CACHE.keys().next().value;
-    if (oldestKey !== undefined) PROFESSION_RECOGNITION_CACHE.delete(oldestKey);
-  }
-  PROFESSION_RECOGNITION_CACHE.set(cacheKey, result);
-  return result;
+  return cacheProfessionRecognition(cacheKey, false);
 }
 
 /**
