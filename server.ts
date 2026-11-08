@@ -275,6 +275,12 @@ export async function checkSingleUrl(rawUrl: string): Promise<UrlCheckResult> {
   }
 }
 
+function matchHash(value: string): string {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i++) hash = Math.imul(hash ^ value.charCodeAt(i), 16777619);
+  return (hash >>> 0).toString(36);
+}
+
 async function startServer() {
   const app = express();
 app.use((req: Request, res: Response, next) => {
@@ -326,7 +332,9 @@ app.use((req: Request, res: Response, next) => {
         .replace(/ı/g, 'i').replace(/ğ/g, 'g').replace(/ü/g, 'u')
         .replace(/ş/g, 's').replace(/ö/g, 'o').replace(/ç/g, 'c').trim();
       
-      const path = normCity ? `/is-ilanlari/${normCity}?kw=${encodeURIComponent(profession)}` : `/is-ilanlari?kw=${encodeURIComponent(profession)}`;
+      // Kariyer.net şehir yolu zaman zaman değiştiği için canlı aramayı ana arama
+      // endpoint'i üzerinden yapıyoruz; şehir filtresi aşağıdaki sonuç filtrelemesinde uygulanır.
+      const path = `/is-ilanlari?kw=${encodeURIComponent(profession)}`;
       const kariyerUrl = `https://www.kariyer.net${path}`;
       
       let html = '';
@@ -410,6 +418,56 @@ app.use((req: Request, res: Response, next) => {
               'Kariyer.net üzerinden doğrudan başvuru yapılabilir',
               'Pozisyona uygun mesleki deneyim veya sertifika'
             ]
+          });
+        }
+      }
+
+      // Kariyer kart yapısı değişirse genel ilan bağlantılarından güvenli bir yedek çıkarıcı kullan.
+      if (jobs.length === 0 && html) {
+        const fallbackRegex = /<a\s+[^>]*href="(\/is-ilani\/[^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+        let fallbackMatch;
+        const seenFallback = new Set<string>();
+        while ((fallbackMatch = fallbackRegex.exec(html)) !== null && jobs.length < 8) {
+          const url = 'https://www.kariyer.net' + fallbackMatch[1];
+          if (seenFallback.has(url)) continue;
+          seenFallback.add(url);
+          const text = fallbackMatch[2]
+            .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+            .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/&nbsp;/gi, ' ')
+            .replace(/&amp;/gi, '&')
+            .replace(/\s+/g, ' ')
+            .trim();
+          if (text.length < 4) continue;
+          const title = text.split(' | ')[0].trim().slice(0, 120);
+          const lowerTitle = title.toLocaleLowerCase('tr-TR');
+          if (!lowerTitle || lowerTitle === 'detay' || lowerTitle.includes('ilanı incele')) continue;
+          const isNationwide = !isUserCityFilterActive;
+          jobs.push({
+            id: 'knet-fallback-' + matchHash(url),
+            title,
+            company: 'Kariyer.net',
+            city: isNationwide ? 'Tüm İller' : city,
+            isNationwide,
+            sourceId: 'kariyernet',
+            sourceName: 'Kariyer.net Doğrulanmış İlanı',
+            sourceDomain: 'kariyer.net',
+            isPublicSector: false,
+            sourceBadgeColor: 'bg-purple-700',
+            originalUrl: url,
+            referenceCode: 'KNET-' + matchHash(url),
+            publishDate: 'Aktif İlan',
+            deadlineDate: 'Aktif İlan (Başvuruya Açık)',
+            requiredEducation: ['Lise (Ortaöğretim)', 'Önlisans', 'Lisans'],
+            allowedDepartments: [profession, 'Fark Etmez'],
+            minAge: 18,
+            maxAge: 55,
+            quota: 1,
+            requiresKpss: false,
+            employmentType: 'Özel Sektör',
+            description: `${title} pozisyonu için Kariyer.net üzerinde yayınlanan ilan.`,
+            additionalRequirements: ['Kariyer.net üzerinden doğrudan başvuru yapılabilir']
           });
         }
       }
@@ -572,9 +630,10 @@ app.use((req: Request, res: Response, next) => {
       const verificationResults = await mapWithConcurrency(uniqueJobs, async (job) => {
         try {
           const check = await checkSingleUrl(job.originalUrl);
-          return !check.isExpired && !check.is404 && check.status === 'active';
+          // 403/5xx/erişim kısıtları ilanın URL'sinin geçersiz olduğu anlamına gelmez.
+          // Sadece kesin olarak 404/kaldırılmış/süresi dolmuş ilanları ele.
+          return !check.isExpired && !check.is404 && check.status !== 'not_found';
         } catch {
-          // If check threw an error, keep job only if not an expired url
           return !job.originalUrl.includes('404') && !job.originalUrl.includes('suresi-dolmus');
         }
       });
