@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { 
   LinkVerificationResult, 
   getAllCachedVerifications, 
@@ -15,15 +15,26 @@ export function useLinkVerification(jobs: JobPosting[]) {
     getAllCachedVerifications()
   );
   const [isVerifying, setIsVerifying] = useState(false);
+  const safeUrlCacheRef = useRef(new WeakMap<JobPosting, string>());
 
-  // Extract all URLs from current jobs
+  const getCachedSafeJobUrl = useCallback((job: JobPosting): string => {
+    const cached = safeUrlCacheRef.current.get(job);
+    if (cached !== undefined) return cached;
+
+    const url = getSafeJobUrl(job);
+    safeUrlCacheRef.current.set(job, url);
+    return url;
+  }, []);
+
+  // Extract all URLs from current jobs without re-resolving safe URLs
+  // when verification state changes.
   const urls = useMemo(() => {
     return Array.from(new Set(
       jobs
-        .map(j => getSafeJobUrl(j))
+        .map(getCachedSafeJobUrl)
         .filter(u => !!u && (u.startsWith('http://') || u.startsWith('https://')))
     ));
-  }, [jobs]);
+  }, [jobs, getCachedSafeJobUrl]);
 
   // Subscribe to changes from verification service
   useEffect(() => {
@@ -98,23 +109,12 @@ export function useLinkVerification(jobs: JobPosting[]) {
     return await verifySingleLink(url, true);
   }, []);
 
-  // Resolve each current job URL/status once per verification state.
-  // ResultsView may inspect the same job many times while filtering.
-  const jobStatusMap = useMemo(() => {
-    const map = new WeakMap<JobPosting, LinkVerificationResult | null>();
-
-    for (const job of jobs) {
-      const url = getSafeJobUrl(job);
-      map.set(job, verifications[url] || (job.originalUrl ? verifications[job.originalUrl] : null) || null);
-    }
-
-    return map;
-  }, [jobs, verifications]);
-
-  // Check if a specific job's link is 404 or broken
+  // Resolve the safe URL once per job, then do an O(1) verification lookup.
+  // This avoids rebuilding a WeakMap for every single verification update.
   const getJobStatus = useCallback((job: JobPosting): LinkVerificationResult | null => {
-    return jobStatusMap.get(job) ?? null;
-  }, [jobStatusMap]);
+    const url = getCachedSafeJobUrl(job);
+    return verifications[url] || (job.originalUrl ? verifications[job.originalUrl] : null) || null;
+  }, [getCachedSafeJobUrl, verifications]);
 
   // Check if a job is confirmed expired / deadline reached
   const isJobExpired = useCallback((job: JobPosting): boolean => {
