@@ -78,7 +78,9 @@ if (typeof window !== 'undefined') {
 
 // Listeners for reactive updates
 type VerificationListener = (url: string, result: LinkVerificationResult) => void;
+type VerificationBatchListener = (results: LinkVerificationResult[]) => void;
 const listeners = new Set<VerificationListener>();
+const batchListeners = new Set<VerificationBatchListener>();
 
 export function subscribeToLinkVerifications(listener: VerificationListener): () => void {
   listeners.add(listener);
@@ -87,10 +89,22 @@ export function subscribeToLinkVerifications(listener: VerificationListener): ()
   };
 }
 
+export function subscribeToLinkVerificationBatches(listener: VerificationBatchListener): () => void {
+  batchListeners.add(listener);
+  return () => {
+    batchListeners.delete(listener);
+  };
+}
+
 function notifyListeners(url: string, result: LinkVerificationResult): void {
   // Sadece değişen kaydı bildir. Tüm cache'i kopyalamak, ilan sayısı büyüdükçe
   // her doğrulamada gereksiz CPU ve bellek tahsisi oluşturuyordu.
   listeners.forEach(fn => fn(url, result));
+}
+
+function notifyBatchListeners(results: LinkVerificationResult[]): void {
+  if (results.length === 0) return;
+  batchListeners.forEach(fn => fn(results));
 }
 
 /**
@@ -233,9 +247,7 @@ export async function verifyBatchLinks(
 
     // Batch sonunda bekleyen değişiklikleri tek yazımda kalıcılaştır.
     flushCacheToStorage();
-    for (const item of batchUpdatedItems) {
-      notifyListeners(item.url, item);
-    }
+    notifyBatchListeners(batchUpdatedItems);
   } catch (err) {
     // If the batch endpoint itself fails, fall back in bounded chunks
     // rather than launching one request per URL at once.
