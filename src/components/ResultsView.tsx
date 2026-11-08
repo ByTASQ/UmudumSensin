@@ -41,6 +41,7 @@ const getJobSearchFields = (job: JobPosting) => {
 };
 
 const JOB_NEWS_CACHE = new WeakMap<JobPosting, boolean>();
+const JOB_SPECIFIC_URL_CACHE = new WeakMap<JobPosting, boolean>();
 
 interface VirtualJobListProps {
   items: MatchResult[];
@@ -320,6 +321,14 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
   const isJobLinkBroken = (job: JobPosting): boolean => {
     const status = getJobStatus(job);
     return status?.is404 === true || status?.status === 'not_found' || status?.isExpired === true;
+  };
+
+  const isJobSpecificUrl = (job: JobPosting): boolean => {
+    const cached = JOB_SPECIFIC_URL_CACHE.get(job);
+    if (cached !== undefined) return cached;
+    const result = isSpecificJobUrl(job.originalUrl);
+    JOB_SPECIFIC_URL_CACHE.set(job, result);
+    return result;
   };
 
   // Kullanıcının seçtiği il filtresini denetle
