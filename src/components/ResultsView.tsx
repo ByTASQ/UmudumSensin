@@ -33,6 +33,7 @@ const VirtualJobList: React.FC<VirtualJobListProps> = ({ items, savedJobIdSet, o
   const containerRef = useRef<HTMLDivElement>(null);
   const heightsRef = useRef<number[]>([]);
   const offsetsRef = useRef<number[]>([]);
+  const rowObserversRef = useRef<Map<number, ResizeObserver>>(new Map());
   const [viewport, setViewport] = useState({ scrollTop: 0, height: 600 });
 
   const rebuildOffsets = useCallback(() => {
@@ -100,6 +101,10 @@ const VirtualJobList: React.FC<VirtualJobListProps> = ({ items, savedJobIdSet, o
   );
 
   const measureRow = useCallback((index: number, node: HTMLDivElement | null) => {
+    const previousObserver = rowObserversRef.current.get(index);
+    previousObserver?.disconnect();
+    rowObserversRef.current.delete(index);
+
     if (!node) return;
 
     const measure = () => {
@@ -115,15 +120,13 @@ const VirtualJobList: React.FC<VirtualJobListProps> = ({ items, savedJobIdSet, o
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(node);
-    (node as HTMLDivElement & { __virtualObserver?: ResizeObserver }).__virtualObserver = observer;
+    rowObserversRef.current.set(index, observer);
   }, [rebuildOffsets]);
 
   useEffect(() => {
     return () => {
-      document.querySelectorAll('[data-virtual-job-row]').forEach(node => {
-        const observer = (node as HTMLDivElement & { __virtualObserver?: ResizeObserver }).__virtualObserver;
-        observer?.disconnect();
-      });
+      rowObserversRef.current.forEach(observer => observer.disconnect());
+      rowObserversRef.current.clear();
     };
   }, []);
 
