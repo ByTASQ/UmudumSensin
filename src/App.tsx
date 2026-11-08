@@ -4,12 +4,10 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { UserCriteria, JobSource, MatchResult, JobPosting } from './types/job';
+import { UserCriteria, JobSource, MatchResult } from './types/job';
 import { 
   loadSources, 
   saveSources, 
-  loadAllJobPostings, 
-  DEFAULT_SOURCES 
 } from './sources/sourceRegistry';
 import { 
   loadSavedCriteria, 
@@ -40,7 +38,6 @@ import { ScanningModal } from './components/ScanningModal';
 export default function App() {
   const [criteria, setCriteria] = useState<UserCriteria>(loadSavedCriteria);
   const [sources, setSources] = useState<JobSource[]>(loadSources);
-  const [allJobs, setAllJobs] = useState<JobPosting[]>(loadAllJobPostings);
   const [matchResults, setMatchResults] = useState<MatchResult[]>([]);
   const [currentTab, setCurrentTab] = useState<NavTab>('scan');
   const [isScanning, setIsScanning] = useState(false);
