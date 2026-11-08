@@ -189,7 +189,7 @@ export const ScanForm: React.FC<ScanFormProps> = ({
               <select
                 value={criteria.educationLevel}
                 onChange={(e) => onChange({ ...criteria, educationLevel: e.target.value })}
-                className="w-full px-3.5 py-2.5 text-sm bg-white/80 dark:bg-slate-900/80 border border-purple-200/80 dark:border-purple-900/60 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-purple-500 transition font-medium text-slate-900 dark:text-slate-100"
+                className="w-full px-3.5 py-2.5 text-sm bg-white/80 dark:bg-slate-900/80 border border-purple-200/80 dark:border-purple-900/60 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-purple-500 transition-colors font-medium text-slate-900 dark:text-slate-100"
               >
                 {EDUCATION_OPTIONS}
               </select>
@@ -226,7 +226,7 @@ export const ScanForm: React.FC<ScanFormProps> = ({
                   value={criteria.age}
                   onChange={(e) => onChange({ ...criteria, age: e.target.value === '' ? '' : parseInt(e.target.value, 10) })}
                   placeholder="Örn: 30"
-                  className="w-full px-3.5 py-2.5 text-sm bg-white/80 dark:bg-slate-900/80 border border-purple-200/80 dark:border-purple-900/60 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-purple-500 transition font-medium text-slate-900 dark:text-slate-100 placeholder:text-slate-400"
+                  className="w-full px-3.5 py-2.5 text-sm bg-white/80 dark:bg-slate-900/80 border border-purple-200/80 dark:border-purple-900/60 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-purple-500 transition-colors font-medium text-slate-900 dark:text-slate-100 placeholder:text-slate-400"
                 />
               </div>
 
@@ -291,7 +291,7 @@ export const ScanForm: React.FC<ScanFormProps> = ({
                 <select
                   value={criteria.city}
                   onChange={(e) => handleCityChange(e.target.value)}
-                  className="w-full px-3.5 py-2.5 text-sm bg-white/80 dark:bg-slate-900/80 border border-purple-200/80 dark:border-purple-900/60 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-purple-500 transition font-medium text-slate-900 dark:text-slate-100"
+                  className="w-full px-3.5 py-2.5 text-sm bg-white/80 dark:bg-slate-900/80 border border-purple-200/80 dark:border-purple-900/60 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-purple-500 transition-colors font-medium text-slate-900 dark:text-slate-100"
                 >
                   {CITY_OPTIONS}
                 </select>
@@ -306,7 +306,7 @@ export const ScanForm: React.FC<ScanFormProps> = ({
                   <select
                     value={criteria.district || ''}
                     onChange={(e) => onChange({ ...criteria, district: e.target.value })}
-                    className="w-full px-3.5 py-2.5 text-sm bg-white/80 dark:bg-slate-900/80 border border-purple-200/80 dark:border-purple-900/60 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-purple-500 transition font-medium text-slate-900 dark:text-slate-100"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white/80 dark:bg-slate-900/80 border border-purple-200/80 dark:border-purple-900/60 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-purple-500 transition-colors font-medium text-slate-900 dark:text-slate-100"
                   >
                     <option value="">Fark Etmez / Tümü</option>
                     {selectedCityObj.districts.map((dist) => (
@@ -321,7 +321,7 @@ export const ScanForm: React.FC<ScanFormProps> = ({
                     value={criteria.district || ''}
                     onChange={(e) => onChange({ ...criteria, district: e.target.value })}
                     placeholder="İlçe adı..."
-                    className="w-full px-3.5 py-2.5 text-sm bg-white/80 dark:bg-slate-900/80 border border-purple-200/80 dark:border-purple-900/60 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-purple-500 transition text-slate-900 dark:text-slate-100"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white/80 dark:bg-slate-900/80 border border-purple-200/80 dark:border-purple-900/60 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-purple-500 transition-colors text-slate-900 dark:text-slate-100"
                   />
                 )}
               </div>
@@ -334,7 +334,7 @@ export const ScanForm: React.FC<ScanFormProps> = ({
         <section className="relative z-10 w-full px-4 sm:px-8 xl:px-12 py-5 border-b border-purple-200/50 dark:border-purple-900/40 bg-white/40 dark:bg-slate-950/40 flex items-center justify-center">
           <button
             type="submit"
-            className="w-full sm:w-auto min-w-[280px] sm:min-w-[360px] py-4 px-8 bg-purple-600 hover:bg-purple-700 text-white font-black text-sm sm:text-base tracking-wide rounded-2xl shadow-lg shadow-purple-950/25 active:scale-[0.98] transition flex items-center justify-center gap-3 cursor-pointer"
+            className="w-full sm:w-auto min-w-[280px] sm:min-w-[360px] py-4 px-8 bg-purple-600 hover:bg-purple-700 text-white font-black text-sm sm:text-base tracking-wide rounded-2xl shadow-lg shadow-purple-950/25 active:scale-[0.98] transition-colors flex items-center justify-center gap-3 cursor-pointer"
           >
             <Search className="w-5 h-5 stroke-[2.5]" />
             <span>İLANLARI TARA VE ANALİZ ET</span>
