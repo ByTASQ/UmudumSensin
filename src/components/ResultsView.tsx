@@ -161,6 +161,17 @@ const VirtualJobList: React.FC<VirtualJobListProps> = ({ items, savedJobIdSet, o
     rowObserversRef.current.set(index, observer);
   }, [getRowKey, rebuildOffsets]);
 
+  const rowRefCallbacksRef = useRef<Map<number, (node: HTMLDivElement | null) => void>>(new Map());
+
+  const getRowRefCallback = useCallback((index: number) => {
+    const existing = rowRefCallbacksRef.current.get(index);
+    if (existing) return existing;
+
+    const callback = (node: HTMLDivElement | null) => measureRow(index, node);
+    rowRefCallbacksRef.current.set(index, callback);
+    return callback;
+  }, [measureRow]);
+
   useEffect(() => {
     return () => {
       rowObserversRef.current.forEach(observer => observer.disconnect());
@@ -181,7 +192,7 @@ const VirtualJobList: React.FC<VirtualJobListProps> = ({ items, savedJobIdSet, o
             <div
               key={`${result.job.id}-${result.job.sourceId || index}`}
               data-virtual-job-row
-              ref={node => measureRow(index, node)}
+              ref={getRowRefCallback(index)}
               style={{
                 position: 'absolute',
                 top,
@@ -450,7 +461,7 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
       }
 
       return true;
-    }).sort((a, b) => b.matchPercentage - a.matchPercentage);
+    });
   }, [sortedActiveResults, statusFilter, sourceFilter, normalizedSearchQuery, savedJobIdSet]);
 
   // Sector display text
