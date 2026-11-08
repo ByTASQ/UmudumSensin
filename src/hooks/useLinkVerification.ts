@@ -37,6 +37,11 @@ export function useLinkVerification(jobs: JobPosting[]) {
     ));
   }, [jobs, getCachedSafeJobUrl]);
 
+  // The jobs array can be recreated when criteria change even when the actual
+  // URL set is unchanged. Use a stable content signature so verification is
+  // not restarted for those unrelated React updates.
+  const urlsSignature = useMemo(() => urls.join('\u0001'), [urls]);
+
   // Subscribe to changes from verification service
   useEffect(() => {
     const notifyVersionChange = (changed: boolean) => {
@@ -121,7 +126,7 @@ export function useLinkVerification(jobs: JobPosting[]) {
         window.clearTimeout(idleHandle as number);
       }
     };
-  }, [urls]);
+  }, [urlsSignature]);
 
   // Force re-verification of all current job URLs
   const verifyAll = useCallback(async () => {
