@@ -49,13 +49,14 @@ interface VirtualJobListProps {
 }
 
 const ESTIMATED_CARD_HEIGHT = 112;
-const VIRTUAL_OVERSCAN = 6;
+const VIRTUAL_OVERSCAN = 3;
 
 const VirtualJobList: React.FC<VirtualJobListProps> = ({ items, savedJobIdSet, onToggleSave }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const heightCacheRef = useRef<Map<string, number>>(new Map());
   const offsetsRef = useRef<number[]>([]);
-  const rowObserversRef = useRef<Map<number, ResizeObserver>>(new Map());
+  const rowObserverRef = useRef<ResizeObserver | null>(null);
+  const rowIndexByNodeRef = useRef<Map<HTMLDivElement, number>>(new Map());
 
   const getRowKey = useCallback((result: MatchResult) => {
     return `${result.job.id}-${result.job.sourceId || ''}`;
@@ -84,8 +85,9 @@ const VirtualJobList: React.FC<VirtualJobListProps> = ({ items, savedJobIdSet, o
   );
 
   useEffect(() => {
-    rowObserversRef.current.forEach(observer => observer.disconnect());
-    rowObserversRef.current.clear();
+    rowObserverRef.current?.disconnect();
+    rowObserverRef.current = null;
+    rowIndexByNodeRef.current.clear();
     rebuildOffsets();
 
     const el = containerRef.current;
@@ -136,29 +138,60 @@ const VirtualJobList: React.FC<VirtualJobListProps> = ({ items, savedJobIdSet, o
   );
 
   const measureRow = useCallback((index: number, node: HTMLDivElement | null) => {
-    const previousObserver = rowObserversRef.current.get(index);
-    previousObserver?.disconnect();
-    rowObserversRef.current.delete(index);
+    const previousNode = Array.from(rowIndexByNodeRef.current.entries())
+      .find(([, rowIndex]) => rowIndex === index)?.[0];
 
-    if (!node) return;
+    if (previousNode && previousNode !== node) {
+      rowIndexByNodeRef.current.delete(previousNode);
+      rowObserverRef.current?.unobserve(previousNode);
+    }
 
-    const measure = () => {
-      const height = node.getBoundingClientRect().height;
-      const result = itemsRef.current[index];
-      if (!result) return;
-      const rowKey = getRowKey(result);
-      const previous = heightCacheRef.current.get(rowKey) || ESTIMATED_CARD_HEIGHT;
-      if (Math.abs(previous - height) < 1) return;
+    if (!node) {
+      return;
+    }
 
-      heightCacheRef.current.set(rowKey, height);
+    rowIndexByNodeRef.current.set(node, index);
+
+    if (!rowObserverRef.current) {
+      rowObserverRef.current = new ResizeObserver(entries => {
+        let changed = false;
+
+        for (const entry of entries) {
+          const rowIndex = rowIndexByNodeRef.current.get(entry.target as HTMLDivElement);
+          if (rowIndex === undefined) continue;
+
+          const result = itemsRef.current[rowIndex];
+          if (!result) continue;
+
+          const height = entry.contentRect.height;
+          const rowKey = getRowKey(result);
+          const previous = heightCacheRef.current.get(rowKey) || ESTIMATED_CARD_HEIGHT;
+          if (Math.abs(previous - height) < 1) continue;
+
+          heightCacheRef.current.set(rowKey, height);
+          changed = true;
+        }
+
+        if (changed) {
+          rebuildOffsets();
+          setViewport(current => ({ ...current }));
+        }
+      });
+    }
+
+    const initialHeight = node.offsetHeight;
+    const result = itemsRef.current[index];
+    if (!result) return;
+
+    const rowKey = getRowKey(result);
+    const previous = heightCacheRef.current.get(rowKey) || ESTIMATED_CARD_HEIGHT;
+    if (Math.abs(previous - initialHeight) >= 1) {
+      heightCacheRef.current.set(rowKey, initialHeight);
       rebuildOffsets();
       setViewport(current => ({ ...current }));
-    };
+    }
 
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(node);
-    rowObserversRef.current.set(index, observer);
+    rowObserverRef.current.observe(node);
   }, [getRowKey, rebuildOffsets]);
 
   const rowRefCallbacksRef = useRef<Map<number, (node: HTMLDivElement | null) => void>>(new Map());
@@ -174,8 +207,9 @@ const VirtualJobList: React.FC<VirtualJobListProps> = ({ items, savedJobIdSet, o
 
   useEffect(() => {
     return () => {
-      rowObserversRef.current.forEach(observer => observer.disconnect());
-      rowObserversRef.current.clear();
+      rowObserverRef.current?.disconnect();
+      rowObserverRef.current = null;
+      rowIndexByNodeRef.current.clear();
     };
   }, []);
 
