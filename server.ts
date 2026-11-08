@@ -1,4 +1,5 @@
 import express, { Request, Response } from 'express';
+import cors from 'cors';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import fs from 'fs';
@@ -277,6 +278,7 @@ export async function checkSingleUrl(rawUrl: string): Promise<UrlCheckResult> {
 
 async function startServer() {
   const app = express();
+app.use(cors({ origin: true }));
   const port = process.env.PORT || 3000;
 
   app.use(express.json());
