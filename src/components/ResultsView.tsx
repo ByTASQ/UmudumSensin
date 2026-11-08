@@ -110,10 +110,28 @@ const VirtualJobList: React.FC<VirtualJobListProps> = ({ items, savedJobIdSet, o
     offsetsRef.current = offsets;
   }, [getRowKey]);
 
-  const itemKeySignature = useMemo(
-    () => items.map(item => getRowKey(item)).join('\u0001'),
-    [items, getRowKey]
-  );
+  const itemKeySignature = useMemo(() => {
+    // Avoid allocating a large joined string for every virtual-list update.
+    // The pair of 32-bit hashes preserves the existing "keys changed" semantics
+    // while substantially reducing temporary allocations on low-end devices.
+    let hashA = 2166136261;
+    let hashB = 2246822519;
+
+    for (const item of items) {
+      const key = getRowKey(item);
+      for (let i = 0; i < key.length; i++) {
+        const code = key.charCodeAt(i);
+        hashA ^= code;
+        hashA = Math.imul(hashA, 16777619);
+        hashB ^= code + 0x9e3779b9;
+        hashB = Math.imul(hashB, 2246822519);
+      }
+      hashA ^= key.length;
+      hashB = Math.imul(hashB ^ key.length, 3266489917);
+    }
+
+    return items.length + ':' + (hashA >>> 0) + ':' + (hashB >>> 0);
+  }, [items, getRowKey]);
 
   const scheduleLayoutUpdate = useCallback(() => {
     if (layoutUpdateFrameRef.current !== null) return;
