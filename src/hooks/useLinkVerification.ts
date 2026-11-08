@@ -15,7 +15,7 @@ export function useLinkVerification(jobs: JobPosting[]) {
   const verificationsRef = useRef<Record<string, LinkVerificationResult>>(
     getAllCachedVerifications()
   );
-  const [, setVerificationVersion] = useState(0);
+  const [verificationVersion, setVerificationVersion] = useState(0);
   const safeUrlCacheRef = useRef(new WeakMap<JobPosting, string>());
 
   const getCachedSafeJobUrl = useCallback((job: JobPosting): string => {
@@ -140,6 +140,7 @@ export function useLinkVerification(jobs: JobPosting[]) {
 
   return {
     verifications: verificationsRef.current,
+    verificationVersion,
     isVerifying,
     verifyAll,
     verifyUrl,
