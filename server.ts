@@ -309,12 +309,26 @@ async function startServer() {
         .replace(/ş/g, 's').replace(/ö/g, 'o').replace(/ç/g, 'c').trim();
       
       const path = normCity ? `/is-ilanlari/${normCity}?kw=${encodeURIComponent(profession)}` : `/is-ilanlari?kw=${encodeURIComponent(profession)}`;
-      const cmd = `curl -s -L --max-time 6 "https://www.kariyer.net${path}"`;
+      const kariyerUrl = `https://www.kariyer.net${path}`;
       
       let html = '';
       try {
-        html = execSync(cmd, { encoding: 'utf8' });
-      } catch {}
+        const kariyerRes = await fetch(kariyerUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'tr-TR,tr;q=0.9'
+          },
+          signal: AbortSignal.timeout(6000)
+        });
+        html = await kariyerRes.text();
+      } catch {
+        // Fallback for environments where Kariyer.net blocks Node fetch.
+        const cmd = `curl -s -L --max-time 6 "${kariyerUrl}"`;
+        try {
+          html = execSync(cmd, { encoding: 'utf8' });
+        } catch {}
+      }
 
       const cardRegex = /<a\s+href="(\/is-ilani\/[^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
       let match;
