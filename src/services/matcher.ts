@@ -21,6 +21,10 @@ interface NormalizedJobFields {
   title: string;
   allowedDepartments: string[];
   requiredEducation: string[];
+  hasEducationFlexible: boolean;
+  hasLiseEducation: boolean;
+  hasOnlisansEducation: boolean;
+  hasLisansEducation: boolean;
   description: string;
   isElectronics: boolean;
   isCs: boolean;
@@ -84,11 +88,16 @@ function getNormalizedJobFields(job: JobPosting): NormalizedJobFields {
   if (cached) return cached;
 
   const allowedDepartments = (job.allowedDepartments || []).map(normalizeTurkish);
+  const requiredEducation = (job.requiredEducation || []).map(normalizeTurkish);
   const fields: NormalizedJobFields = {
     city: normalizeTurkish(job.city),
     title: normalizeTurkish(job.title),
     allowedDepartments,
-    requiredEducation: (job.requiredEducation || []).map(normalizeTurkish),
+    requiredEducation,
+    hasEducationFlexible: requiredEducation.some(e => e === 'fark etmez' || e.includes('fark etmez')),
+    hasLiseEducation: requiredEducation.some(e => e.includes('lise') || e.includes('ortaogretim')),
+    hasOnlisansEducation: requiredEducation.some(e => e.includes('onlisans')),
+    hasLisansEducation: requiredEducation.some(e => !e.includes('onlisans') && e.includes('lisans')),
     description: normalizeTurkish(job.description),
     isElectronics: allowedDepartments.some(allowedNorm =>
       ELECTRONICS_KEYWORDS.some(k => allowedNorm.includes(k))
@@ -581,21 +590,13 @@ export function evaluateJobMatch(job: JobPosting, criteria: UserCriteria): Match
     });
   }
 
-  const eduMatch = isEducationFlexible || jobFields.requiredEducation.some(normReq => {
-    if (normReq === 'fark etmez' || normReq.includes('fark etmez')) return true;
-    if (normReq === userEduNorm) return true;
-
-    const reqIsLise = normReq.includes('lise') || normReq.includes('ortaogretim');
-    const reqIsOnlisans = normReq.includes('onlisans');
-    const reqIsLisans = !reqIsOnlisans && normReq.includes('lisans');
-
-    if (userIsLisans && (reqIsOnlisans || reqIsLisans)) return true;
-    if (userIsYuksek && (reqIsLisans || reqIsOnlisans)) return true;
-    if (userIsOnlisans && reqIsOnlisans) return true;
-    if (userIsLise && reqIsLise) return true;
-
-    return false;
-  });
+  const eduMatch = isEducationFlexible ||
+    jobFields.hasEducationFlexible ||
+    jobFields.requiredEducation.includes(userEduNorm) ||
+    (userIsLisans && (jobFields.hasOnlisansEducation || jobFields.hasLisansEducation)) ||
+    (userIsYuksek && (jobFields.hasLisansEducation || jobFields.hasOnlisansEducation)) ||
+    (userIsOnlisans && jobFields.hasOnlisansEducation) ||
+    (userIsLise && jobFields.hasLiseEducation);
 
   if (eduMatch) {
     score += 25;
@@ -741,7 +742,7 @@ export function evaluateJobMatch(job: JobPosting, criteria: UserCriteria): Match
   // 5. KPSS PUANI ŞARTI (KPSS SCORE CHECK)
   const jobRequiresKpss = job.requiresKpss ?? (job.minKpssScore !== undefined && job.minKpssScore > 0);
   const minRequiredKpss = job.minKpssScore || 0;
-  const kpssType = job.kpssScoreType || (job.requiredEducation.some(e => e.includes('Lisans')) ? 'KPSS P3' : 'KPSS P93');
+  const kpssType = job.kpssScoreType || (jobFields.hasLisansEducation ? 'KPSS P3' : 'KPSS P93');
 
   if (isNoKpssChecked) {
     // Kullanıcı "KPSS Puanım Yok" seçeneğini işaretledi
