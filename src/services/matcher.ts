@@ -198,7 +198,7 @@ function checkEducationTitleLegalityNormalized(
     // 1. Mühendislik ve Mimarlık (3458 sayılı Mühendislik ve Mimarlık Hakkında Kanun)
     const isArchitect = (normTitle.includes('mimar') || normTitle.includes('mimarlig')) &&
                         !normTitle.includes('tekniker') && !normTitle.includes('yardimci') && !normTitle.includes('restorasyon');
-    if (isEngineerJob(jobTitle) || isArchitect) {
+    if (normTitle.includes('muhendis') || normTitle.includes('muhendislig') || isArchitect) {
       return {
         isLegal: false,
         reason: '3458 sayılı Mühendislik ve Mimarlık Kanunu gereği Mühendis ve Mimar kadroları en az 4 yıllık lisans diploması gerektirir. 2 yıllık önlisans mezunları bu unvanı taşıyamaz ve mühendis kadrolarına başvuramaz.'
