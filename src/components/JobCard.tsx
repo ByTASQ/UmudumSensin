@@ -45,6 +45,7 @@ const getCachedJobCardFields = (job: MatchResult['job']): CachedJobCardFields =>
   return fields;
 };
 
+interface JobCardProps {
   result: MatchResult;
   isSelected?: boolean;
   isSaved?: boolean;
