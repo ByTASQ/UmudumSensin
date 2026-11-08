@@ -16,61 +16,7 @@ const JOB_POOL_CACHE_LIMIT = 12;
 const PROFESSION_RECOGNITION_CACHE = new Map<string, boolean>();
 const PROFESSION_RECOGNITION_CACHE_LIMIT = 256;
 
-/**
- * Kullanıcının yazdığı kelimenin gerçek bir meslek, bölüm, sektör veya kadro unvanı
- * olup olmadığını doğrular.
- * Rastgele tuş vuruşları (örn: "hukloıjkıuh", "asdfghjk", "zxcvbnm"), anlamsız metinler
- * veya gerçekte var olmayan meslekler için ASLA sahte belediye/kamu/özel sektör ilanları üretilmez!
- */
-function cacheProfessionRecognition(key: string, result: boolean): boolean {
-  if (PROFESSION_RECOGNITION_CACHE.size >= PROFESSION_RECOGNITION_CACHE_LIMIT) {
-    const oldestKey = PROFESSION_RECOGNITION_CACHE.keys().next().value;
-    if (oldestKey !== undefined) PROFESSION_RECOGNITION_CACHE.delete(oldestKey);
-  }
-  PROFESSION_RECOGNITION_CACHE.set(key, result);
-  return result;
-}
-
-export function isRecognizedProfession(query?: string): boolean {
-  if (!query || !query.trim()) return cacheProfessionRecognition(cacheKey, true);
-  const trimmed = query.trim();
-  if (trimmed.length < 2) return false;
-
-  const cacheKey = normalizeTurkish(trimmed);
-  const cached = PROFESSION_RECOGNITION_CACHE.get(cacheKey);
-  if (cached !== undefined) return cached;
-
-  const norm = cacheKey;
-
-  // 1. ALL_PROFESSIONS listesinde tam veya alt küme eşleşme
-  for (const prof of ALL_PROFESSIONS) {
-    const profNorm = normalizeTurkish(prof.name);
-    if (profNorm === norm || profNorm.startsWith(norm) || (norm.length >= 3 && profNorm.includes(norm))) {
-      return cacheProfessionRecognition(cacheKey, true);
-    }
-  }
-
-  // 2. ALL_DEPARTMENTS listesinde eşleşme
-  for (const dept of ALL_DEPARTMENTS) {
-    const deptNorm = normalizeTurkish(dept.name);
-    if (deptNorm === norm || deptNorm.startsWith(norm) || (norm.length >= 3 && deptNorm.includes(norm))) {
-      return cacheProfessionRecognition(cacheKey, true);
-    }
-  }
-
-  // 3. Mevcut INITIAL_JOB_POSTINGS ilan başlıkları veya departmanlarında eşleşme
-  for (const job of INITIAL_JOB_POSTINGS) {
-    const titleNorm = normalizeTurkish(job.title);
-    if (titleNorm.includes(norm)) {
-      return cacheProfessionRecognition(cacheKey, true);
-    }
-    if (job.allowedDepartments && job.allowedDepartments.some(d => normalizeTurkish(d).includes(norm))) {
-      return cacheProfessionRecognition(cacheKey, true);
-    }
-  }
-
-  // 4. Türkiye istihdam piyasasında standart kabul edilen meslek ve kadro kökleri
-  const knownProfessionRoots = [
+const KNOWN_PROFESSION_ROOTS = [
     'muhendis', 'mimar', 'tekniker', 'teknisyen', 'doktor', 'tabip', 'hemsire', 'ebe',
     'eczaci', 'avukat', 'ogretmen', 'zabit', 'katip', 'mubasir', 'memur', 'sofor',
     'guvenlik', 'temizlik', 'hizmetli', 'operator', 'kaynak', 'montaj', 'muhasebe',
@@ -91,7 +37,93 @@ export function isRecognizedProfession(query?: string): boolean {
     'formen', 'sefi', 'sef', 'amir', 'uzman', 'denetci', 'mufettis', 'analist'
   ];
 
-  if (knownProfessionRoots.some(root => norm.includes(root))) {
+const PUBLIC_SECTOR_KEYWORDS = [
+    'memur', 'tekniker', 'muhendis', 'saglik', 'hemsire', 'doktor', 'tabip', 'ebe',
+    'avukat', 'ogretmen', 'zabita', 'itfaiye', 'bekci', 'koruma', 'guvenlik', 'buro',
+    'arsiv', 'destek personeli', 'temizlik', 'sofor', 'hizmetli', 'arkeolog', 'mimar',
+    'psikolog', 'sosyal calismaci', 'veteriner', 'vaiz', 'imam', 'muezzin', 'sayman',
+    'denetci', 'mufettis', 'uzman', 'ogretim gorevlisi', 'arastirma gorevlisi',
+    'infaz koruma', 'katip', 'kamu', 'laborant', 'anestezi', 'radyoloji', 'fizyoterapist',
+    'saglik teknikeri', 'tibbi sekreter', 'paramedik', 'biyomedikal', 'programci', 'cozumleyici'
+  ];
+
+const NORMALIZED_PROFESSION_NAMES = ALL_PROFESSIONS.map(prof => normalizeTurkish(prof.name));
+const NORMALIZED_DEPARTMENT_NAMES = ALL_DEPARTMENTS.map(dept => normalizeTurkish(dept.name));
+
+/**
+ * Kullanıcının yazdığı kelimenin gerçek bir meslek, bölüm, sektör veya kadro unvanı
+ * olup olmadığını doğrular.
+ * Rastgele tuş vuruşları (örn: "hukloıjkıuh", "asdfghjk", "zxcvbnm"), anlamsız metinler
+ * veya gerçekte var olmayan meslekler için ASLA sahte belediye/kamu/özel sektör ilanları üretilmez!
+ */
+function cacheProfessionRecognition(key: string, result: boolean): boolean {
+  if (PROFESSION_RECOGNITION_CACHE.size >= PROFESSION_RECOGNITION_CACHE_LIMIT) {
+    const oldestKey = PROFESSION_RECOGNITION_CACHE.keys().next().value;
+    if (oldestKey !== undefined) PROFESSION_RECOGNITION_CACHE.delete(oldestKey);
+  }
+  PROFESSION_RECOGNITION_CACHE.set(key, result);
+  return result;
+}
+
+export function isRecognizedProfession(query?: string): boolean {
+  if (!query || !query.trim()) return true;
+  const trimmed = query.trim();
+  if (trimmed.length < 2) return false;
+
+  const cacheKey = normalizeTurkish(trimmed);
+  const cached = PROFESSION_RECOGNITION_CACHE.get(cacheKey);
+  if (cached !== undefined) return cached;
+
+  const norm = cacheKey;
+
+  // 1. ALL_PROFESSIONS listesinde tam veya alt küme eşleşme
+  for (const profNorm of NORMALIZED_PROFESSION_NAMES) {
+    if (profNorm === norm || profNorm.startsWith(norm) || (norm.length >= 3 && profNorm.includes(norm))) {
+      return cacheProfessionRecognition(cacheKey, true);
+    }
+  }
+
+  // 2. ALL_DEPARTMENTS listesinde eşleşme
+  for (const deptNorm of NORMALIZED_DEPARTMENT_NAMES) {
+    if (deptNorm === norm || deptNorm.startsWith(norm) || (norm.length >= 3 && deptNorm.includes(norm))) {
+      return cacheProfessionRecognition(cacheKey, true);
+    }
+  }
+
+  // 3. Mevcut INITIAL_JOB_POSTINGS ilan başlıkları veya departmanlarında eşleşme
+  for (const job of INITIAL_JOB_POSTINGS) {
+    const titleNorm = normalizeTurkish(job.title);
+    if (titleNorm.includes(norm)) {
+      return cacheProfessionRecognition(cacheKey, true);
+    }
+    if (job.allowedDepartments && job.allowedDepartments.some(d => normalizeTurkish(d).includes(norm))) {
+      return cacheProfessionRecognition(cacheKey, true);
+    }
+  }
+
+  // 4. Türkiye istihdam piyasasında standart kabul edilen meslek ve kadro kökleri
+  const KNOWN_PROFESSION_ROOTS = [
+    'muhendis', 'mimar', 'tekniker', 'teknisyen', 'doktor', 'tabip', 'hemsire', 'ebe',
+    'eczaci', 'avukat', 'ogretmen', 'zabit', 'katip', 'mubasir', 'memur', 'sofor',
+    'guvenlik', 'temizlik', 'hizmetli', 'operator', 'kaynak', 'montaj', 'muhasebe',
+    'pazarlama', 'satis', 'asci', 'garson', 'kurye', 'depo', 'lojistik', 'psikolog',
+    'veteriner', 'biyolog', 'diyetisyen', 'fizyoterapist', 'radyoloji', 'anestezi',
+    'laborant', 'sekreter', 'asistan', 'danisman', 'grafiker', 'tasarim', 'programci',
+    'yazilim', 'bilgisayar', 'elektrik', 'elektronik', 'makine', 'mekatronik', 'insaat',
+    'harita', 'ziraat', 'tarim', 'kimya', 'cevre', 'gida', 'maden', 'jeoloji', 'orman',
+    'tekstil', 'ahsap', 'mobilya', 'metal', 'dokum', 'pres', 'torna', 'freze', 'cnc',
+    'lazer', 'kalip', 'bakim', 'onarim', 'kalite', 'banka', 'finans', 'ik', 'yonetici',
+    'mudur', 'sehir plancisi', 'arkeolog', 'sosyal calismaci', 'itfaiye', 'zabita', 'bekci',
+    'gardiyan', 'infaz', 'santral', 'cagri merkezi', 'veri giris', 'isletmen', 'grafik',
+    'resim', 'muzik', 'beden egitimi', 'terzi', 'berber', 'kuafor', 'boyaci', 'tesisat',
+    'siva', 'fayans', 'kaynakci', 'vinc', 'forklift', 'kamyon', 'otobus', 'taksi', 'kasiyer',
+    'reyon', 'magaza', 'komi', 'barmen', 'barista', 'resepsiyon', 'bellboy', 'animator',
+    'rehber', 'tercuman', 'cevirmen', 'gazeteci', 'muhabir', 'editor', 'spiker', 'seslendirmen',
+    'fotografci', 'kameraman', 'kurgu', 'dizgi', 'matbaa', 'ciltci', 'usta', 'cirak', 'kalfa',
+    'formen', 'sefi', 'sef', 'amir', 'uzman', 'denetci', 'mufettis', 'analist'
+  ];
+
+  if (KNOWN_PROFESSION_ROOTS.some(root => norm.includes(root))) {
     return cacheProfessionRecognition(cacheKey, true);
   }
 
@@ -106,7 +138,7 @@ export function isRecognizedProfession(query?: string): boolean {
  */
 export function isTypicalPublicSectorProfession(profession: string): boolean {
   const norm = normalizeTurkish(profession);
-  const publicKeywords = [
+  const PUBLIC_SECTOR_KEYWORDS = [
     'memur', 'tekniker', 'muhendis', 'saglik', 'hemsire', 'doktor', 'tabip', 'ebe',
     'avukat', 'ogretmen', 'zabita', 'itfaiye', 'bekci', 'koruma', 'guvenlik', 'buro',
     'arsiv', 'destek personeli', 'temizlik', 'sofor', 'hizmetli', 'arkeolog', 'mimar',
@@ -115,7 +147,7 @@ export function isTypicalPublicSectorProfession(profession: string): boolean {
     'infaz koruma', 'katip', 'kamu', 'laborant', 'anestezi', 'radyoloji', 'fizyoterapist',
     'saglik teknikeri', 'tibbi sekreter', 'paramedik', 'biyomedikal', 'programci', 'cozumleyici'
   ];
-  return publicKeywords.some(kw => norm.includes(kw));
+  return PUBLIC_SECTOR_KEYWORDS.some(kw => norm.includes(kw));
 }
 
 /**
