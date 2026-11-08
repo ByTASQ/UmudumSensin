@@ -55,7 +55,8 @@ const NORMALIZED_DEPARTMENT_NAMES = ALL_DEPARTMENTS.map(dept => normalizeTurkish
 const NORMALIZED_INITIAL_JOB_FIELDS = INITIAL_JOB_POSTINGS.map(job => ({
   job,
   title: normalizeTurkish(job.title),
-  departments: (job.allowedDepartments || []).map(department => normalizeTurkish(department))
+  departments: (job.allowedDepartments || []).map(department => normalizeTurkish(department)),
+  city: normalizeTurkish(job.city || '')
 }));
 
 /**
@@ -1394,33 +1395,38 @@ export function generateDynamicJobPool(
   const cachedBase = BASE_SAMPLE_CACHE.get(baseSampleCacheKey);
 
   if (!baseSampleList || !cachedBase || cachedBase.expiresAt <= nowForBaseCache) {
-    baseSampleList = INITIAL_JOB_POSTINGS.filter(j => {
-      if (!isJobActive(j)) return false;
+    baseSampleList = [];
+    for (const normalizedJob of NORMALIZED_INITIAL_JOB_FIELDS) {
+      const j = normalizedJob.job;
+      if (!isJobActive(j)) continue;
 
       // 1. Meslek / Unvan eşleşmesi (checkProfessionMatch ile spesifik vs genel kök ayrımı)
       if (profession && profession.trim()) {
-        const profMatch = checkProfessionMatch(profession, j.title, j.allowedDepartments, j.description);
-        if (!profMatch.isMatch) {
-          return false;
-        }
+        const profMatch = checkProfessionMatch(
+          profession,
+          j.title,
+          j.allowedDepartments,
+          j.description
+        );
+        if (!profMatch.isMatch) continue;
       }
 
       // 2. İl Filtresi Kontrolü:
       // Kullanıcı belirli bir il (örn: Aydın) seçtiğinde yalnızca o ildeki veya Türkiye geneli ilanlar kabul edilir.
       if (isCityFilterActive) {
-        const jobCityNorm = normalizeTurkish(j.city || '');
+        const jobCityNorm = normalizedJob.city;
         const isNationwide = j.isNationwide === true ||
                              jobCityNorm.includes('tum') ||
                              jobCityNorm.includes('genel') ||
                              jobCityNorm.includes('turkiye');
-        const isExactCity = jobCityNorm === normUserCity || jobCityNorm.includes(normUserCity) || normUserCity.includes(jobCityNorm);
-        if (!isNationwide && !isExactCity) {
-          return false;
-        }
+        const isExactCity = jobCityNorm === normUserCity ||
+                            jobCityNorm.includes(normUserCity) ||
+                            normUserCity.includes(jobCityNorm);
+        if (!isNationwide && !isExactCity) continue;
       }
 
-      return true;
-    });
+      baseSampleList.push(j);
+    }
 
     if (BASE_SAMPLE_CACHE.size >= BASE_SAMPLE_CACHE_LIMIT) {
       const oldestKey = BASE_SAMPLE_CACHE.keys().next().value;
@@ -1435,12 +1441,23 @@ export function generateDynamicJobPool(
   // 4. Dinamik Şehir ve Unvan Tamamlayıcı:
   // Yalnızca doğrulanmış ve tanınan meslekler için o ilde yeterli ilan yoksa tamamlayıcı üretilir.
   // "hukloıjkıuh" gibi anlamsız aramalar için asla sahte belediye/üniversite ilanı üretilmez.
-  const currentCityMatches = [...generatedJobs, ...baseSampleList].filter(j => {
-    const jCity = normalizeTurkish(j.city || '');
-    return j.isNationwide || jCity === normUserCity || jCity.includes(normUserCity);
-  });
+  let currentCityMatches = 0;
+  if (normUserCity) {
+    for (const job of generatedJobs) {
+      const jCity = normalizeTurkish(job.city || '');
+      if (job.isNationwide || jCity === normUserCity || jCity.includes(normUserCity)) {
+        currentCityMatches++;
+      }
+    }
+    for (const job of baseSampleList) {
+      const jCity = normalizeTurkish(job.city || '');
+      if (job.isNationwide || jCity === normUserCity || jCity.includes(normUserCity)) {
+        currentCityMatches++;
+      }
+    }
+  }
 
-  if (currentCityMatches.length < 8 && city && profession && isRecognizedProfession(rawProfession)) {
+  if (currentCityMatches < 8 && city && profession && isRecognizedProfession(rawProfession)) {
     const capCity = city.charAt(0).toLocaleUpperCase('tr-TR') + city.slice(1);
     const capProf = profession.charAt(0).toLocaleUpperCase('tr-TR') + profession.slice(1);
     const slugProf = toUrlSlug(profession);
@@ -1901,33 +1918,36 @@ export function generateDynamicJobPool(
     }
   }
 
-  // Birleştir ve tekilleştir
-  const combinedList = [...generatedJobs, ...baseSampleList]
-    .filter(j => j.id !== 'job-memurlar-portal-001')
-    .filter(j => isJobActive(j)).filter(j => isSpecificJobUrl(j.originalUrl));
-
+  // Birleştir ve tekilleştir. Ara diziler oluşturmadan tek geçişte filtrele.
   const seenIds = new Set<string>();
   const uniqueJobs: JobPosting[] = [];
-  
-  for (const job of combinedList) {
-    if (!seenIds.has(job.id)) {
-      seenIds.add(job.id);
-      
-      // Memurlar.net bir kamu kurumu olmayıp sadece ilan haberleri yayımlayan bir sitedir.
-      // Bu nedenle Memurlar.net kaynaklı içerikler Özel statüsüne alınır ve İlan Haberi olarak belirtilir.
-      const isMemurlar = job.sourceId === 'memurlar' || 
-                         job.sourceId === 'memurlar_net' || 
-                         job.sourceDomain?.includes('memurlar.net') || 
-                         job.originalUrl?.includes('memurlar.net');
-      if (isMemurlar) {
-        job.isPublicSector = false;
-        job.sourceId = 'memurlar_net';
-        job.sourceName = 'Memurlar.net (İlan Haberi)';
-      }
 
-      uniqueJobs.push(job);
+  const appendUniqueJob = (job: JobPosting, checkActive: boolean): void => {
+    if (job.id === 'job-memurlar-portal-001') return;
+    if (checkActive && !isJobActive(job)) return;
+    if (!isSpecificJobUrl(job.originalUrl)) return;
+    if (seenIds.has(job.id)) return;
+
+    seenIds.add(job.id);
+
+    // Memurlar.net bir kamu kurumu olmayıp sadece ilan haberleri yayımlayan bir sitedir.
+    // Bu nedenle Memurlar.net kaynaklı içerikler Özel statüsüne alınır ve İlan Haberi olarak belirtilir.
+    const isMemurlar = job.sourceId === 'memurlar' ||
+                       job.sourceId === 'memurlar_net' ||
+                       job.sourceDomain?.includes('memurlar.net') ||
+                       job.originalUrl?.includes('memurlar.net');
+    if (isMemurlar) {
+      job.isPublicSector = false;
+      job.sourceId = 'memurlar_net';
+      job.sourceName = 'Memurlar.net (İlan Haberi)';
     }
-  }
+
+    uniqueJobs.push(job);
+  };
+
+  for (const job of generatedJobs) appendUniqueJob(job, true);
+  // baseSampleList zaten aktif ilanlardan oluşuyor; tarih kontrolünü tekrar yapma.
+  for (const job of baseSampleList) appendUniqueJob(job, false);
 
   if (JOB_POOL_CACHE.size >= JOB_POOL_CACHE_LIMIT) {
     const oldestKey = JOB_POOL_CACHE.keys().next().value;
