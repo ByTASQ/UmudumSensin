@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.ilanbulucu.app",
+      "sha256_cert_fingerprints": [
+        "14:6D:E9:7B:0F:52:AB:CE:8B:4F:92:4E:9F:8E:7F:32:04:8E:9E:59:7A:B4:42:24:99:65:21:E7:26:4A:8E:44"
+      ]
+    }
+  }
+]

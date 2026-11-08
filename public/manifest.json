@@ -1,0 +1,90 @@
+{
+  "id": "/?source=pwa",
+  "name": "İlan Bulucu - Kamu & Özel Sektör İş İlanları",
+  "short_name": "İlan Bulucu",
+  "description": "Kullanıcı kriterlerine (meslek, mezuniyet, bölüm, yaş, il) göre kamu ve özel sektör iş ilanlarını tarayan ve uygunluk analizi yapan mobil uygulama.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "window-controls-overlay"],
+  "orientation": "portrait-primary",
+  "background_color": "#0f172a",
+  "theme_color": "#7e22ce",
+  "lang": "tr",
+  "dir": "ltr",
+  "categories": ["business", "productivity", "utilities"],
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "İlan Ara",
+      "short_name": "Tara",
+      "description": "Kriterlerinize göre yeni ilan taraması başlatın",
+      "url": "/?tab=scan",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Eşleşen Sonuçlar",
+      "short_name": "Sonuçlar",
+      "description": "Size en uygun güncel ilanları listeleyin",
+      "url": "/?tab=results",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "İlan Kaynakları",
+      "short_name": "Kaynaklar",
+      "description": "Taranan kamu ve özel sektör portallarını görüntüleyin",
+      "url": "/?tab=sources",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ]
+}

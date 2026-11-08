@@ -1,0 +1,51 @@
+{
+  "packageId": "com.ilanbulucu.app",
+  "host": "localhost:3000",
+  "name": "İlan Bulucu",
+  "launcherName": "İlan Bulucu",
+  "themeColor": "#7E22CE",
+  "navigationColor": "#0F172A",
+  "navigationColorDark": "#0F172A",
+  "navigationDividerColor": "#00000000",
+  "navigationDividerColorDark": "#00000000",
+  "backgroundColor": "#0F172A",
+  "enableNotifications": false,
+  "startUrl": "/?source=pwa",
+  "iconUrl": "https://raw.githubusercontent.com/favicon/icon-512.png",
+  "maskableIconUrl": "https://raw.githubusercontent.com/favicon/icon-maskable-512.png",
+  "appVersionName": "1.0",
+  "appVersionCode": 1,
+  "signing": {
+    "scheme": "v2"
+  },
+  "splashScreenFadeOutDuration": 300,
+  "enableSiteSettingsShortcut": true,
+  "shortcuts": [
+    {
+      "name": "İlan Ara",
+      "shortName": "Ara",
+      "url": "/?tab=scan",
+      "icon": "icon_1"
+    },
+    {
+      "name": "Sonuçlar",
+      "shortName": "Sonuçlar",
+      "url": "/?tab=results",
+      "icon": "icon_2"
+    }
+  ],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "/manifest.json",
+  "fallbackType": "customtabs",
+  "features": {
+    "locationDelegation": {
+      "enabled": false
+    },
+    "playBilling": {
+      "enabled": false
+    }
+  },
+  "alphaDependencies": {
+    "enabled": false
+  }
+}

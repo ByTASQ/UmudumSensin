@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgMask" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7e22ce" />
+      <stop offset="50%" stop-color="#581c87" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#059669" />
+    </linearGradient>
+  </defs>
+
+  <!-- Solid full background (NO corner radius for maskable) -->
+  <rect width="512" height="512" fill="url(#bgMask)" />
+
+  <!-- Center Content scaled down inside safe circle (within radius 180) -->
+  <g transform="translate(64, 64) scale(0.75)">
+    <!-- Briefcase Handle -->
+    <path d="M192 168 V140 C192 122 206 108 224 108 H288 C306 108 320 122 320 140 V168" fill="none" stroke="#c084fc" stroke-width="26" stroke-linecap="round" />
+    
+    <!-- Main Bag Body -->
+    <rect x="96" y="168" width="320" height="236" rx="36" fill="rgba(255,255,255,0.12)" stroke="#c084fc" stroke-width="12" />
+    
+    <!-- Clasp -->
+    <rect x="236" y="232" width="40" height="32" rx="8" fill="url(#accentGrad)" stroke="#ffffff" stroke-width="4" />
+
+    <!-- Search Loupe -->
+    <circle cx="340" cy="340" r="76" fill="#1e1b4b" stroke="#38bdf8" stroke-width="14" />
+    <path d="M316 340 L334 358 L368 324" fill="none" stroke="#34d399" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" />
+    <line x1="394" y1="394" x2="444" y2="444" stroke="#38bdf8" stroke-width="20" stroke-linecap="round" />
+  </g>
+</svg>

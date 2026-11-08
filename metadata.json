@@ -1,0 +1,8 @@
+{
+  "name": "Remix Umudum Sensin iş arama",
+  "description": "Kriterlerinize uygun iş ilanlarını kişisel verilerinizi toplamadan hızlıca tarayan ve listeleyen anonim iş arama asistanı.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
