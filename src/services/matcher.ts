@@ -1,9 +1,18 @@
 import { JobPosting, MatchResult, RequirementCheck, UserCriteria } from '../types/job';
 
-// Normalizes Turkish characters to ASCII lowercase for forgiving, cross-keyboard comparisons
+// Normalizes Turkish characters to ASCII lowercase for forgiving, cross-keyboard comparisons.
+// Matching evaluates the same job/user strings repeatedly, so keep a small bounded
+// cache to avoid repeating the same Unicode/string transformations.
+const NORMALIZE_CACHE = new Map<string, string>();
+const NORMALIZE_CACHE_LIMIT = 4096;
+
 export function normalizeTurkish(text?: string | null): string {
   if (!text) return '';
-  return text
+
+  const cached = NORMALIZE_CACHE.get(text);
+  if (cached !== undefined) return cached;
+
+  const normalized = text
     .trim()
     .replace(/İ/g, 'i')
     .replace(/I/g, 'i')
@@ -19,6 +28,13 @@ export function normalizeTurkish(text?: string | null): string {
     .replace(/Ç/g, 'c')
     .replace(/ç/g, 'c')
     .toLowerCase();
+
+  if (NORMALIZE_CACHE.size >= NORMALIZE_CACHE_LIMIT) {
+    const oldestKey = NORMALIZE_CACHE.keys().next().value;
+    if (oldestKey !== undefined) NORMALIZE_CACHE.delete(oldestKey);
+  }
+  NORMALIZE_CACHE.set(text, normalized);
+  return normalized;
 }
 
 // Neighboring or regional pairs in Turkey (e.g. Aydın and Denizli/İzmir/Muğla)
