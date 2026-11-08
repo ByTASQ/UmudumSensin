@@ -15,6 +15,9 @@ const JOB_POOL_CACHE_TTL_MS = 30_000;
 const JOB_POOL_CACHE_LIMIT = 12;
 const PROFESSION_RECOGNITION_CACHE = new Map<string, boolean>();
 const PROFESSION_RECOGNITION_CACHE_LIMIT = 256;
+const BASE_SAMPLE_CACHE = new Map<string, { expiresAt: number; jobs: JobPosting[] }>();
+const BASE_SAMPLE_CACHE_TTL_MS = 30_000;
+const BASE_SAMPLE_CACHE_LIMIT = 12;
 
 const KNOWN_PROFESSION_ROOTS = [
     'muhendis', 'mimar', 'tekniker', 'teknisyen', 'doktor', 'tabip', 'hemsire', 'ebe',
@@ -1407,33 +1410,53 @@ export function generateDynamicJobPool(
     !normUserCity.includes('genel')
   );
 
-  const baseSampleList = INITIAL_JOB_POSTINGS.filter(j => {
-    if (!isJobActive(j)) return false;
-
-    // 1. Meslek / Unvan eşleşmesi (checkProfessionMatch ile spesifik vs genel kök ayrımı)
-    if (profession && profession.trim()) {
-      const profMatch = checkProfessionMatch(profession, j.title, j.allowedDepartments, j.description);
-      if (!profMatch.isMatch) {
-        return false;
-      }
-    }
-
-    // 2. İl Filtresi Kontrolü:
-    // Kullanıcı belirli bir il (örn: Aydın) seçtiğinde yalnızca o ildeki veya Türkiye geneli ilanlar kabul edilir.
-    if (isCityFilterActive) {
-      const jobCityNorm = normalizeTurkish(j.city || '');
-      const isNationwide = j.isNationwide === true ||
-                           jobCityNorm.includes('tum') ||
-                           jobCityNorm.includes('genel') ||
-                           jobCityNorm.includes('turkiye');
-      const isExactCity = jobCityNorm === normUserCity || jobCityNorm.includes(normUserCity) || normUserCity.includes(jobCityNorm);
-      if (!isNationwide && !isExactCity) {
-        return false;
-      }
-    }
-
-    return true;
+  const baseSampleCacheKey = JSON.stringify({
+    profession: normProf,
+    city: normUserCity,
+    cityFilter: isCityFilterActive
   });
+  const nowForBaseCache = Date.now();
+  let baseSampleList = BASE_SAMPLE_CACHE.get(baseSampleCacheKey)?.jobs;
+  const cachedBase = BASE_SAMPLE_CACHE.get(baseSampleCacheKey);
+
+  if (!baseSampleList || !cachedBase || cachedBase.expiresAt <= nowForBaseCache) {
+    baseSampleList = INITIAL_JOB_POSTINGS.filter(j => {
+      if (!isJobActive(j)) return false;
+
+      // 1. Meslek / Unvan eşleşmesi (checkProfessionMatch ile spesifik vs genel kök ayrımı)
+      if (profession && profession.trim()) {
+        const profMatch = checkProfessionMatch(profession, j.title, j.allowedDepartments, j.description);
+        if (!profMatch.isMatch) {
+          return false;
+        }
+      }
+
+      // 2. İl Filtresi Kontrolü:
+      // Kullanıcı belirli bir il (örn: Aydın) seçtiğinde yalnızca o ildeki veya Türkiye geneli ilanlar kabul edilir.
+      if (isCityFilterActive) {
+        const jobCityNorm = normalizeTurkish(j.city || '');
+        const isNationwide = j.isNationwide === true ||
+                             jobCityNorm.includes('tum') ||
+                             jobCityNorm.includes('genel') ||
+                             jobCityNorm.includes('turkiye');
+        const isExactCity = jobCityNorm === normUserCity || jobCityNorm.includes(normUserCity) || normUserCity.includes(jobCityNorm);
+        if (!isNationwide && !isExactCity) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+
+    if (BASE_SAMPLE_CACHE.size >= BASE_SAMPLE_CACHE_LIMIT) {
+      const oldestKey = BASE_SAMPLE_CACHE.keys().next().value;
+      if (oldestKey !== undefined) BASE_SAMPLE_CACHE.delete(oldestKey);
+    }
+    BASE_SAMPLE_CACHE.set(baseSampleCacheKey, {
+      expiresAt: nowForBaseCache + BASE_SAMPLE_CACHE_TTL_MS,
+      jobs: baseSampleList
+    });
+  }
 
   // 4. Dinamik Şehir ve Unvan Tamamlayıcı:
   // Yalnızca doğrulanmış ve tanınan meslekler için o ilde yeterli ilan yoksa tamamlayıcı üretilir.
