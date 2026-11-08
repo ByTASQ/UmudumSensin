@@ -471,7 +471,6 @@ export function evaluateJobMatch(job: JobPosting, criteria: UserCriteria): Match
     });
   }
 
-  const isEducationFlexible = !criteria.educationLevel || criteria.educationLevel === 'Fark Etmez';
   const eduMatch = isEducationFlexible || jobFields.requiredEducation.some(normReq => {
     if (normReq === 'fark etmez' || normReq.includes('fark etmez')) return true;
     if (normReq === userEduNorm) return true;
@@ -606,11 +605,6 @@ export function evaluateJobMatch(job: JobPosting, criteria: UserCriteria): Match
   }
 
   // 4. KONUM (LOCATION)
-  const isAllCities = !criteria.city || 
-                      criteria.city === 'Tüm İller (Türkiye Geneli)' || 
-                      criteria.city === 'Tüm İller' ||
-                      userCityNorm.includes('tum') ||
-                      userCityNorm.includes('genel');
   const isCityExact = userCityNorm === jobCityNorm || jobCityNorm.includes(userCityNorm);
   const isNationwideJob = job.isNationwide === true || 
                           jobCityNorm.includes('tum') || 
@@ -646,13 +640,6 @@ export function evaluateJobMatch(job: JobPosting, criteria: UserCriteria): Match
   }
 
   // 5. KPSS PUANI ŞARTI (KPSS SCORE CHECK)
-  const isNoKpssChecked = Boolean(criteria.noKpss);
-  const userKpss = typeof criteria.kpssScore === 'number'
-    ? criteria.kpssScore
-    : (criteria.kpssScore !== '' && criteria.kpssScore !== undefined && !isNaN(parseFloat(String(criteria.kpssScore))))
-    ? parseFloat(String(criteria.kpssScore))
-    : null;
-
   const jobRequiresKpss = job.requiresKpss ?? (job.minKpssScore !== undefined && job.minKpssScore > 0);
   const minRequiredKpss = job.minKpssScore || 0;
   const kpssType = job.kpssScoreType || (job.requiredEducation.some(e => e.includes('Lisans')) ? 'KPSS P3' : 'KPSS P93');
