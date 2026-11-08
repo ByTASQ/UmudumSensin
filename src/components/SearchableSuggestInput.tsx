@@ -270,7 +270,7 @@ export const SearchableSuggestInput: React.FC<SearchableSuggestInputProps> = ({
       {isOpen && (
         <div 
           ref={listRef}
-          className="absolute z-50 left-0 right-0 mt-1.5 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl ring-1 ring-purple-500/20 border border-purple-200 dark:border-purple-800/80 max-h-56 sm:max-h-64 overflow-y-auto flex flex-col text-xs animate-in fade-in-50 zoom-in-95 duration-100 divide-y divide-purple-100/70 dark:divide-purple-950/60"
+          className="absolute z-50 left-0 right-0 mt-1.5 bg-white dark:bg-slate-900 rounded-2xl shadow-lg ring-1 ring-purple-500/20 border border-purple-200 dark:border-purple-800/80 max-h-56 sm:max-h-64 overflow-y-auto flex flex-col text-xs divide-y divide-purple-100/70 dark:divide-purple-950/60"
         >
           {filteredSuggestions.length > 0 ? (
             filteredSuggestions.map((item, idx) => {
