@@ -331,7 +331,7 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
     }
 
     const controller = new AbortController();
-    const cacheKey = getLiveSearchCacheKey(criteria.profession, criteria.city || '');
+    const cacheKey = getLiveSearchCacheKey(criteria);
     const cached = LIVE_SEARCH_CACHE.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) {
       setLiveResults(cached.results);
