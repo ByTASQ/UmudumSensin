@@ -54,7 +54,7 @@ function saveCacheToStorage(): void {
 initCacheFromStorage();
 
 // Listeners for reactive updates
-type VerificationListener = (results: Record<string, LinkVerificationResult>) => void;
+type VerificationListener = (url: string, result: LinkVerificationResult) => void;
 const listeners = new Set<VerificationListener>();
 
 export function subscribeToLinkVerifications(listener: VerificationListener): () => void {
@@ -64,12 +64,10 @@ export function subscribeToLinkVerifications(listener: VerificationListener): ()
   };
 }
 
-function notifyListeners(): void {
-  const currentSnapshot: Record<string, LinkVerificationResult> = {};
-  for (const [url, res] of memoryCache.entries()) {
-    currentSnapshot[url] = res;
-  }
-  listeners.forEach(fn => fn(currentSnapshot));
+function notifyListeners(url: string, result: LinkVerificationResult): void {
+  // Sadece değişen kaydı bildir. Tüm cache'i kopyalamak, ilan sayısı büyüdükçe
+  // her doğrulamada gereksiz CPU ve bellek tahsisi oluşturuyordu.
+  listeners.forEach(fn => fn(url, result));
 }
 
 /**
@@ -118,7 +116,7 @@ export async function verifySingleLink(
       const data: LinkVerificationResult = await res.json();
       memoryCache.set(url, data);
       saveCacheToStorage();
-      notifyListeners();
+      notifyListeners(url, data);
       return data;
     } catch (err: any) {
       // In case backend is temporarily unreachable, provide a safe fallback
@@ -135,7 +133,7 @@ export async function verifySingleLink(
       };
       memoryCache.set(url, fallback);
       saveCacheToStorage();
-      notifyListeners();
+      notifyListeners(url, fallback);
       return fallback;
     } finally {
       inFlightRequests.delete(url);
@@ -206,9 +204,12 @@ export async function verifyBatchLinks(
       }
     }
 
-    // Persist and notify once after the complete batch.
+    // Persist once after the complete batch. Listener'lara yalnızca değişen
+    // kayıtlar bildirilir; tüm cache snapshot'ı kopyalanmaz.
     saveCacheToStorage();
-    notifyListeners();
+    for (const item of Object.values(dataResultsFromBatch(memoryCache, toFetch))) {
+      notifyListeners(item.url, item);
+    }
   } catch (err) {
     // If the batch endpoint itself fails, fall back in bounded chunks
     // rather than launching one request per URL at once.
@@ -223,6 +224,20 @@ export async function verifyBatchLinks(
     if (memoryCache.has(u)) output[u] = memoryCache.get(u)!;
   }
   return output;
+}
+
+
+
+function dataResultsFromBatch(
+  cache: Map<string, LinkVerificationResult>,
+  urls: string[]
+): Record<string, LinkVerificationResult> {
+  const changed: Record<string, LinkVerificationResult> = {};
+  for (const url of urls) {
+    const item = cache.get(url);
+    if (item) changed[url] = item;
+  }
+  return changed;
 }
 
 /**
