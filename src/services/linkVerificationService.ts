@@ -37,8 +37,16 @@ function initCacheFromStorage(): void {
   }
 }
 
-// Save cache to localStorage
-function saveCacheToStorage(): void {
+// localStorage yazımı senkron olduğu için her URL doğrulamasında cache'in
+// tamamını serialize etmek düşük donanımlı cihazlarda ana thread'i kilitleyebilir.
+// Değişiklikleri kısa süre biriktirip tek yazımda kalıcılaştırıyoruz.
+let storageWriteTimer: ReturnType<typeof setTimeout> | null = null;
+let storageWritePending = false;
+
+function flushCacheToStorage(): void {
+  if (!storageWritePending) return;
+  storageWritePending = false;
+
   try {
     const obj: Record<string, LinkVerificationResult> = {};
     for (const [url, item] of memoryCache.entries()) {
@@ -50,8 +58,23 @@ function saveCacheToStorage(): void {
   }
 }
 
+function scheduleCacheSave(): void {
+  storageWritePending = true;
+  if (storageWriteTimer !== null) return;
+
+  storageWriteTimer = setTimeout(() => {
+    storageWriteTimer = null;
+    flushCacheToStorage();
+  }, 1000);
+}
+
 // Initialize on module load
 initCacheFromStorage();
+
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', flushCacheToStorage);
+}
 
 // Listeners for reactive updates
 type VerificationListener = (url: string, result: LinkVerificationResult) => void;
@@ -115,7 +138,7 @@ export async function verifySingleLink(
       }
       const data: LinkVerificationResult = await res.json();
       memoryCache.set(url, data);
-      saveCacheToStorage();
+      scheduleCacheSave();
       notifyListeners(url, data);
       return data;
     } catch (err: any) {
@@ -132,7 +155,7 @@ export async function verifySingleLink(
         message: is404 ? 'Sayfa bulunamadı (404)' : 'Bağlantı aktif ve erişilebilir.'
       };
       memoryCache.set(url, fallback);
-      saveCacheToStorage();
+      scheduleCacheSave();
       notifyListeners(url, fallback);
       return fallback;
     } finally {
@@ -207,9 +230,8 @@ export async function verifyBatchLinks(
       }
     }
 
-    // Persist once after the complete batch. Listener'lara yalnızca değişen
-    // kayıtlar bildirilir; tüm cache snapshot'ı kopyalanmaz.
-    saveCacheToStorage();
+    // Batch sonunda bekleyen değişiklikleri tek yazımda kalıcılaştır.
+    flushCacheToStorage();
     for (const item of Object.values(dataResultsFromBatch(memoryCache, toFetch))) {
       notifyListeners(item.url, item);
     }
