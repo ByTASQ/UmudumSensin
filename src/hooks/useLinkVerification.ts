@@ -11,10 +11,11 @@ import { JobPosting } from '../types/job';
 import { getSafeJobUrl } from '../utils/navigation';
 
 export function useLinkVerification(jobs: JobPosting[]) {
-  const [verifications, setVerifications] = useState<Record<string, LinkVerificationResult>>(() => 
+  const [isVerifying, setIsVerifying] = useState(false);
+  const verificationsRef = useRef<Record<string, LinkVerificationResult>>(
     getAllCachedVerifications()
   );
-  const [isVerifying, setIsVerifying] = useState(false);
+  const [, setVerificationVersion] = useState(0);
   const safeUrlCacheRef = useRef(new WeakMap<JobPosting, string>());
 
   const getCachedSafeJobUrl = useCallback((job: JobPosting): string => {
@@ -38,28 +39,36 @@ export function useLinkVerification(jobs: JobPosting[]) {
 
   // Subscribe to changes from verification service
   useEffect(() => {
+    const notifyVersionChange = (changed: boolean) => {
+      if (changed) setVerificationVersion(version => version + 1);
+    };
+
     const unsubscribeSingle = subscribeToLinkVerifications((url, result) => {
-      setVerifications(current => {
-        if (current[url] === result) return current;
-        return { ...current, [url]: result };
-      });
+      const current = verificationsRef.current;
+      if (current[url] === result) return;
+
+      verificationsRef.current = { ...current, [url]: result };
+      notifyVersionChange(true);
     });
 
     const unsubscribeBatch = subscribeToLinkVerificationBatches((results) => {
       if (results.length === 0) return;
-      setVerifications(current => {
-        let changed = false;
-        const next = { ...current };
 
-        for (const result of results) {
-          if (next[result.url] !== result) {
-            next[result.url] = result;
-            changed = true;
-          }
+      const current = verificationsRef.current;
+      let changed = false;
+      const next = { ...current };
+
+      for (const result of results) {
+        if (next[result.url] !== result) {
+          next[result.url] = result;
+          changed = true;
         }
+      }
 
-        return changed ? next : current;
-      });
+      if (changed) {
+        verificationsRef.current = next;
+        notifyVersionChange(true);
+      }
     });
 
     return () => {
@@ -113,8 +122,9 @@ export function useLinkVerification(jobs: JobPosting[]) {
   // This avoids rebuilding a WeakMap for every single verification update.
   const getJobStatus = useCallback((job: JobPosting): LinkVerificationResult | null => {
     const url = getCachedSafeJobUrl(job);
+    const verifications = verificationsRef.current;
     return verifications[url] || (job.originalUrl ? verifications[job.originalUrl] : null) || null;
-  }, [getCachedSafeJobUrl, verifications]);
+  }, [getCachedSafeJobUrl]);
 
   // Check if a job is confirmed expired / deadline reached
   const isJobExpired = useCallback((job: JobPosting): boolean => {
@@ -129,7 +139,7 @@ export function useLinkVerification(jobs: JobPosting[]) {
   }, [getJobStatus]);
 
   return {
-    verifications,
+    verifications: verificationsRef.current,
     isVerifying,
     verifyAll,
     verifyUrl,
