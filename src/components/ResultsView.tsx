@@ -72,7 +72,7 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
 
   // Extract jobs for status handling on cards
   const allInitialJobs = useMemo(() => allMergedResults.map(r => r.job), [allMergedResults]);
-  const { verifyUrl, getJobStatus } = useLinkVerification(allInitialJobs);
+  const { getJobStatus } = useLinkVerification(allInitialJobs);
 
   // Bir ilanın linkinin 404/kırık veya başvuru süresi dolmuş/yayından kaldırılmış olup olmadığını denetle
   const isJobLinkBroken = (job: JobPosting): boolean => {
@@ -536,9 +536,7 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
                 key={`${result.job.id}-${result.job.sourceId || idx}`}
                 result={result}
                 isSaved={savedJobIdSet.has(result.job.id)}
-                verification={getJobStatus(result.job)}
                 onToggleSave={onToggleSave}
-                onRecheck={verifyUrl}
               />
             ))}
           </div>
