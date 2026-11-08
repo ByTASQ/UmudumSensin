@@ -57,6 +57,7 @@ const VirtualJobList: React.FC<VirtualJobListProps> = ({ items, savedJobIdSet, o
   const offsetsRef = useRef<number[]>([]);
   const rowObserverRef = useRef<ResizeObserver | null>(null);
   const rowIndexByNodeRef = useRef<Map<HTMLDivElement, number>>(new Map());
+  const rowNodeByIndexRef = useRef<Map<number, HTMLDivElement>>(new Map());
 
   const getRowKey = useCallback((result: MatchResult) => {
     return `${result.job.id}-${result.job.sourceId || ''}`;
@@ -88,6 +89,7 @@ const VirtualJobList: React.FC<VirtualJobListProps> = ({ items, savedJobIdSet, o
     rowObserverRef.current?.disconnect();
     rowObserverRef.current = null;
     rowIndexByNodeRef.current.clear();
+    rowNodeByIndexRef.current.clear();
     rebuildOffsets();
 
     const el = containerRef.current;
@@ -138,19 +140,21 @@ const VirtualJobList: React.FC<VirtualJobListProps> = ({ items, savedJobIdSet, o
   );
 
   const measureRow = useCallback((index: number, node: HTMLDivElement | null) => {
-    const previousNode = Array.from(rowIndexByNodeRef.current.entries())
-      .find(([, rowIndex]) => rowIndex === index)?.[0];
+    const previousNode = rowNodeByIndexRef.current.get(index);
 
     if (previousNode && previousNode !== node) {
       rowIndexByNodeRef.current.delete(previousNode);
+      rowNodeByIndexRef.current.delete(index);
       rowObserverRef.current?.unobserve(previousNode);
     }
 
     if (!node) {
+      rowNodeByIndexRef.current.delete(index);
       return;
     }
 
     rowIndexByNodeRef.current.set(node, index);
+    rowNodeByIndexRef.current.set(index, node);
 
     if (!rowObserverRef.current) {
       rowObserverRef.current = new ResizeObserver(entries => {
@@ -210,6 +214,7 @@ const VirtualJobList: React.FC<VirtualJobListProps> = ({ items, savedJobIdSet, o
       rowObserverRef.current?.disconnect();
       rowObserverRef.current = null;
       rowIndexByNodeRef.current.clear();
+      rowNodeByIndexRef.current.clear();
     };
   }, []);
 
