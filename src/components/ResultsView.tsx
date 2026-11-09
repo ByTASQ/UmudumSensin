@@ -449,7 +449,7 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
     const isMemurlar =
       sourceIdLower === 'memurlar_net' ||
       sourceIdLower === 'memurlar' ||
-      domainLower.includes('memurlar.net') ||
+      (domainLower.includes('memurlar.net') && !domainLower.includes('ilan.memurlar.net')) ||
       urlLower.includes('memurlar.net') ||
       sourceNameLower.includes('memurlar');
 
