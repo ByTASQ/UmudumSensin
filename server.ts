@@ -336,7 +336,7 @@ app.use((req: Request, res: Response, next) => {
       
       // Kariyer.net şehir yolu zaman zaman değiştiği için canlı aramayı ana arama
       // endpoint'i üzerinden yapıyoruz; şehir filtresi aşağıdaki sonuç filtrelemesinde uygulanır.
-      const path = `/is-ilanlari?kw=${encodeURIComponent(profession)}`;
+      const path = `/is-ilanlari?kw=${encodeURIComponent(profession)}${city ? `&ct=${encodeURIComponent(city)}` : ''}`;
       const kariyerUrl = `https://www.kariyer.net${path}`;
       
       let html = '';
