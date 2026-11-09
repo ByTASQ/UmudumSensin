@@ -3,6 +3,8 @@ import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import { generateDynamicJobPool } from './src/services/jobService';
+import { DEFAULT_SOURCES } from './src/sources/sourceRegistry';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -644,14 +646,57 @@ app.use((req: Request, res: Response, next) => {
         }
       });
 
-      liveSearchCache.set(liveSearchCacheKey, { jobs: verifiedJobs, timestamp: Date.now() });
+      // Kariyer.net bot/HTML yapısı değiştiğinde canlı scraper boş dönebilir.
+      // Bu durumda uygulamanın kendi doğrulanmış ilan havuzunu yedek kaynak
+      // olarak kullan; böylece arama tamamen boş kalmaz.
+      let finalJobs = verifiedJobs;
+
+      if (finalJobs.length === 0) {
+        try {
+          const fallbackCriteria = {
+            profession,
+            educationLevel: 'Fark Etmez',
+            department: '',
+            age: '',
+            city,
+            district: '',
+            kpssScore: '',
+            noKpss: false,
+            includePublic: true,
+            includePrivate: true,
+            onlyPublicJobs: false
+          } as any;
+
+          const fallbackJobs = generateDynamicJobPool(fallbackCriteria, DEFAULT_SOURCES)
+            .filter(job => job.sourceId !== 'memurlar_net' && job.sourceId !== 'memurlar');
+
+          // Canlı sonuçlarla aynı sözleşmeyi kullan: yalnızca şehir eşleşen
+          // veya Türkiye geneli ilanları gönder.
+          finalJobs = fallbackJobs.filter(job => {
+            if (!isUserCityFilterActive) return true;
+            const jobCity = (job.city || '').toLocaleLowerCase('tr-TR').trim();
+            const nationwide = job.isNationwide === true ||
+              jobCity.includes('tüm') ||
+              jobCity.includes('tum') ||
+              jobCity.includes('genel') ||
+              jobCity.includes('türkiye') ||
+              jobCity.includes('turkiye');
+            return nationwide || jobCity === normUserCity ||
+              jobCity.includes(normUserCity) || normUserCity.includes(jobCity);
+          });
+        } catch {
+          finalJobs = [];
+        }
+      }
+
+      liveSearchCache.set(liveSearchCacheKey, { jobs: finalJobs, timestamp: Date.now() });
       while (liveSearchCache.size > LIVE_SEARCH_CACHE_LIMIT) {
         const oldestKey = liveSearchCache.keys().next().value;
         if (!oldestKey) break;
         liveSearchCache.delete(oldestKey);
       }
 
-      return res.json({ jobs: verifiedJobs });
+      return res.json({ jobs: finalJobs });
     } catch (err: any) {
       return res.json({ jobs: [] });
     }
