@@ -12,7 +12,7 @@ export interface LinkVerificationResult {
 
 import { apiUrl } from './apiConfig';
 
-const STORAGE_CACHE_KEY = 'is_ilani_url_verification_cache_v3';
+const STORAGE_CACHE_KEY = 'is_ilani_url_verification_cache_v4';
 const CACHE_MAX_AGE_MS = 10 * 60 * 1000; // 10 minutes
 
 // In-memory cache
