@@ -121,8 +121,10 @@ export default function App() {
     // Filter and sector-check in one pass to avoid multiple full-array scans.
     const eligiblePool: JobPosting[] = [];
     for (const job of dynamicPool) {
+      // Arama sonucunu URL tipine göre yok etme. Bazı resmi ilanlar kurumun
+      // ilan dizinini kullanır; kartta resolveSafeJobUrl() zaten güvenli
+      // hedef bağlantıyı çözer. Eşleşmeyi kaynak/aktiflik/sektör kriterleri belirler.
       if (!enabledSourceIds.has(job.sourceId) || !isJobActive(job)) continue;
-      if (!isTargetedJobUrl(resolveSafeJobUrl(job))) continue;
       if (includePublic && !includePrivate) {
         if (!job.isPublicSector) continue;
       } else if (!includePublic && includePrivate) {
