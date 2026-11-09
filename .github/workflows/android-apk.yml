@@ -75,6 +75,9 @@ jobs:
           # GitHub-hosted Gradle distribution URL bazen 504 verebiliyor.
           # Wrapper'ı doğrudan services.gradle.org dağıtımına yönlendir.
           sed -i 's#https://github.com/gradle/gradle-distributions/releases/download/\([^/]*/\)\([^/]*\)#https://services.gradle.org/distributions/\2#' gradle/wrapper/gradle-wrapper.properties
+          # Tam Gradle paketi yerine daha küçük binary dağıtımı kullan.
+          sed -i 's/gradle-8.14.3-all.zip/gradle-8.14.3-bin.zip/' gradle/wrapper/gradle-wrapper.properties
+          sed -i 's/networkTimeout=10000/networkTimeout=120000/' gradle/wrapper/gradle-wrapper.properties
           grep 'distributionUrl' gradle/wrapper/gradle-wrapper.properties
 
       - name: Build debug APK
