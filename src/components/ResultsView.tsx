@@ -400,7 +400,12 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
   // Bir ilanın linkinin 404/kırık veya başvuru süresi dolmuş/yayından kaldırılmış olup olmadığını denetle
   const isJobLinkBroken = (job: JobPosting): boolean => {
     const status = getJobStatus(job);
-    return status?.is404 === true || status?.status === 'not_found' || status?.isExpired === true;
+    // "not_found"/"expired" alone is not sufficient: job portals can return
+    // bot-block/soft-error pages with HTTP 200. Only a confirmed HTTP 404/410
+    // is allowed to remove a live-search result from the result list.
+    return status?.is404 === true ||
+      status?.httpStatus === 404 ||
+      status?.httpStatus === 410;
   };
 
   const isJobSpecificUrl = (job: JobPosting): boolean => {
