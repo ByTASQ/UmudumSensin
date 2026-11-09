@@ -170,37 +170,18 @@ export async function checkSingleUrl(rawUrl: string): Promise<UrlCheckResult> {
 
     // Specific detector for expired/closed job announcements (İŞKUR, Kariyer.net, Memurlar.net, Kamu İlan vb.)
     // Detects both "başvuru süresi sonra ermiştir" and "sona ermiştir" and all variations
-    const hasExpiredNoticeText = 
-      normBody.includes('goruntulemekte oldugunuz ilanin basvuru suresi') ||
+    const hasExpiredNoticeText =
       normBody.includes('basvuru suresi sona ermistir') ||
       normBody.includes('basvuru suresi sonra ermistir') ||
       normBody.includes('bu ilanin suresi dolmustur') ||
       normBody.includes('bu ilanin yayini sona ermistir') ||
       normBody.includes('ilan yayindan kaldirilmistir') ||
-      normBody.includes('aradiginiz sayfa bulunamadi') ||
-      normBody.includes('link hatali') ||
-      normBody.includes('yayindan kaldirilmis veya suresi dolmus olabilir') ||
-      normBody.includes('suresi dolmus olabilir') ||
-      normBody.includes('yayindan kaldirilmis olabilir') ||
       normBody.includes('bu ilana artik basvuru yapilamamaktadir') ||
-      normBody.includes('artik basvuru kabul etmiyor') ||
-      normBody.includes('artik ilan kabul etmiyor') ||
-      normBody.includes('ilan kabul etmiyor') ||
       normBody.includes('basvuruya kapalidir') ||
       normBody.includes('basvuruya kapatilmistir') ||
       normBody.includes('bu pozisyon icin basvuru suresi dolmustur') ||
-      normBody.includes('pozisyonun ihtiyaci karsilanmis') ||
-      // Generic "ilan bulunamadı / sayfa bulunamadı" metinleri birçok aktif iş
-      // portalının HTML/JS/footer içeriğinde de bulunabiliyor. Bunları burada
-      // ölüm sinyali kabul etmiyoruz; gerçek 404/410 HTTP kodu aşağıda ayrıca
-      // kontrol ediliyor.
-      normBody.includes('ilan yayindan kaldirilmistir') ||
-      normBody.includes('ilan kapatilmistir') ||
-      normBody.includes('basvuruya kapatilmistir') ||
-      normBody.includes('bu ilana artik basvuru yapilamamaktadir') ||
-      normBody.includes('bu pozisyon icin basvuru suresi dolmustur') ||
-      normBody.includes('yapilmaya calisilan istek reddedildi') ||
-      normBody.includes('request rejected');
+      normBody.includes('pozisyonun ihtiyaci karsilanmistir') ||
+      normBody.includes('ilan kapatilmistir');
 
     // İŞKUR webforms: boş gelen veya sadece sisteme giriş yapınız diyen ve iş tanımı/kontenjanı olmayan ölü veya süresi bitmiş sayfalar
     const isIskurEmptyLoginOnly = rawUrl.includes('iskur.gov.tr') && 
@@ -535,12 +516,9 @@ app.use((req: Request, res: Response, next) => {
             seen.add(url);
 
             const lowerTitle = title.toLocaleLowerCase('tr-TR');
-            const cityOk = !normCityName ||
-              lowerTitle.includes(normCityName) ||
-              url.toLocaleLowerCase('tr-TR').includes(normCityName) ||
-              normCityName.includes('tüm') || normCityName.includes('tum');
-
-            if (!cityOk && source.domain !== 'jooble.org') continue;
+            // DuckDuckGo result title/URL often omits the city even
+            // though the underlying search query is city-restricted.
+            // Do not discard a valid job solely for that presentation detail.
 
             results.push({
               id: 'web-' + matchHash(url),
@@ -733,27 +711,15 @@ app.use((req: Request, res: Response, next) => {
         return bHas - aHas;
       });
 
-      // CANLI DOĞRULAMA FİLTRESİ:
-      // Süresi dolmuş veya "başvuru süresi sonra ermiştir" uyarısı veren ilanları sonuçlardan ayıkla
-      // Canlı arama sonucunu URL doğrulamasının ağ/anti-bot davranışına bağlama.
-      // Render üzerinden Kariyer.net/Eleman.net gibi siteler 403, timeout veya
-      // farklı HTML döndürebilir. Bu durum ilanı silmek için yeterli değildir.
-      // Yalnızca kesin 404/410 veya açık süresi-doldu sinyali varsa ele.
+      // Canlı arama endpoint'i ilanları burada doğrulamak için bekletmez.
+      // Kaynak sitelerinin 403/timeout/anti-bot davranışı arama isteğini
+      // Render timeout'una sürüklememeli. İlan URL doğrulaması istemci
+      // tarafında ayrı ve asenkron yapılır.
       const uniqueJobs = Array.from(
         new Map(jobs.map(job => [job.originalUrl, job])).values()
       );
-
-      const verificationResults = await mapWithConcurrency(uniqueJobs, async (job) => {
-        try {
-          const check = await checkSingleUrl(job.originalUrl);
-          return !check.isExpired && check.httpStatus !== 404 && check.httpStatus !== 410;
-        } catch {
-          return true;
-        }
-      });
-
-      const verifiedJobs = uniqueJobs.filter((_job, index) => verificationResults[index]);
-
+      const finalJobs = uniqueJobs;
+      const liveSearchDurationMs = Date.now() - startTime;
       // Kariyer.net bot/HTML yapısı değiştiğinde canlı scraper boş dönebilir.
       // Bu durumda uygulamanın kendi doğrulanmış ilan havuzunu yedek kaynak
       // olarak kullan; böylece arama tamamen boş kalmaz.
