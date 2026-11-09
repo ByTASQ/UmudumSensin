@@ -11,7 +11,8 @@
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "test": "tsx scripts/test-services.ts",
-    "bump-version": "node scripts/bump-version.js"
+    "bump-version": "node scripts/bump-version.js",
+    "start:api": "tsx server.ts"
   },
   "dependencies": {
     "@capacitor/core": "^8.5.3",
