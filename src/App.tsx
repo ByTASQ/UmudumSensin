@@ -24,7 +24,7 @@ import {
 import { evaluateJobMatch } from './services/matcher';
 import { generateDynamicJobPool } from './services/jobService';
 import { isJobActive } from './utils/dateUtils';
-import { isTargetedJobUrl, resolveSafeJobUrl } from './services/preciseSearchService';
+// URL hedefleme/çözümleme yalnızca ilan kartında kullanılır; eşleşme havuzunu URL tipi belirlemez.
 
 import { AndroidFrame } from './components/AndroidFrame';
 import { Navbar } from './components/Navbar';
