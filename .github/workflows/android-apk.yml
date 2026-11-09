@@ -68,11 +68,25 @@ jobs:
       - name: Sync Android
         run: npx cap sync android
 
+      - name: Prepare Gradle distribution
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          # GitHub-hosted Gradle distribution URL bazen 504 verebiliyor.
+          # Wrapper'ı doğrudan services.gradle.org dağıtımına yönlendir.
+          sed -i 's#https://github.com/gradle/gradle-distributions/releases/download/\([^/]*/\)\([^/]*\)#https://services.gradle.org/distributions/\2#' gradle/wrapper/gradle-wrapper.properties
+          grep 'distributionUrl' gradle/wrapper/gradle-wrapper.properties
+
       - name: Build debug APK
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          for attempt in 1 2 3; do
+            ./gradlew assembleDebug --no-daemon --stacktrace && exit 0
+            echo "Gradle build attempt $attempt failed; retrying..."
+            sleep 5
+          done
+          exit 1
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
