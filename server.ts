@@ -733,7 +733,10 @@ app.use((req: Request, res: Response, next) => {
 
       // CANLI DOĞRULAMA FİLTRESİ:
       // Süresi dolmuş veya "başvuru süresi sonra ermiştir" uyarısı veren ilanları sonuçlardan ayıkla
-      const verifiedJobs: any[] = [];
+      // Canlı arama sonucunu URL doğrulamasının ağ/anti-bot davranışına bağlama.
+      // Render üzerinden Kariyer.net/Eleman.net gibi siteler 403, timeout veya
+      // farklı HTML döndürebilir. Bu durum ilanı silmek için yeterli değildir.
+      // Yalnızca kesin 404/410 veya açık süresi-doldu sinyali varsa ele.
       const uniqueJobs = Array.from(
         new Map(jobs.map(job => [job.originalUrl, job])).values()
       );
@@ -741,19 +744,13 @@ app.use((req: Request, res: Response, next) => {
       const verificationResults = await mapWithConcurrency(uniqueJobs, async (job) => {
         try {
           const check = await checkSingleUrl(job.originalUrl);
-          // 403/5xx/erişim kısıtları ilanın URL'sinin geçersiz olduğu anlamına gelmez.
-          // Sadece kesin olarak 404/kaldırılmış/süresi dolmuş ilanları ele.
-          return !check.isExpired && !check.is404 && check.status !== 'not_found';
+          return !check.isExpired && check.httpStatus !== 404 && check.httpStatus !== 410;
         } catch {
-          return !job.originalUrl.includes('404') && !job.originalUrl.includes('suresi-dolmus');
+          return true;
         }
       });
 
-      uniqueJobs.forEach((job, index) => {
-        if (verificationResults[index]) {
-          verifiedJobs.push(job);
-        }
-      });
+      const verifiedJobs = uniqueJobs.filter((_job, index) => verificationResults[index]);
 
       // Kariyer.net bot/HTML yapısı değiştiğinde canlı scraper boş dönebilir.
       // Bu durumda uygulamanın kendi doğrulanmış ilan havuzunu yedek kaynak
