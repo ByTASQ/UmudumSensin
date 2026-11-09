@@ -504,11 +504,11 @@ app.use((req: Request, res: Response, next) => {
           signal: AbortSignal.timeout(7000)
         });
         const html = await r.text();
-        const resultRegex = /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\\s\\S]*?)<\\/a>/gi;
+        const resultRegex = /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
         let m: RegExpExecArray | null;
         while ((m = resultRegex.exec(html)) !== null && results.length < 24) {
           let url = m[1].replace(/&amp;/g, '&');
-          const title = m[2].replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/\\s+/g, ' ').trim();
+          const title = m[2].replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
           try {
             const parsed = new URL(url, 'https://html.duckduckgo.com');
             const uddg = parsed.searchParams.get('uddg');
@@ -516,7 +516,7 @@ app.use((req: Request, res: Response, next) => {
           } catch {}
           try {
             const parsed = new URL(url);
-            const host = parsed.hostname.toLocaleLowerCase('tr-TR').replace(/^www\\./, '');
+            const host = parsed.hostname.toLocaleLowerCase('tr-TR').replace(/^www\./, '');
             if (host !== source.domain && !host.endsWith('.' + source.domain)) continue;
             if (url.includes('memurlar.net')) continue;
             if (seen.has(url)) continue;
