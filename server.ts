@@ -718,12 +718,9 @@ app.use((req: Request, res: Response, next) => {
       const uniqueJobs = Array.from(
         new Map(jobs.map(job => [job.originalUrl, job])).values()
       );
-      const finalJobs = uniqueJobs;
-      const liveSearchDurationMs = Date.now() - startTime;
-      // Kariyer.net bot/HTML yapısı değiştiğinde canlı scraper boş dönebilir.
-      // Bu durumda uygulamanın kendi doğrulanmış ilan havuzunu yedek kaynak
-      // olarak kullan; böylece arama tamamen boş kalmaz.
-      let finalJobs = verifiedJobs;
+      // Canlı scraper hiçbir kaynak döndürmezse yalnızca bu durumda
+      // uygulamanın yerel havuzunu yedek olarak kullan.
+      let finalJobs = uniqueJobs;
 
       if (finalJobs.length === 0) {
         try {
