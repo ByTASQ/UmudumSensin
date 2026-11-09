@@ -296,6 +296,16 @@ app.use((req: Request, res: Response, next) => {
 
   app.use(express.json());
 
+  // API root: Render/monitoring için servis durumunu açıkça bildir.
+  app.get('/', (_req, res) => {
+    res.json({
+      service: 'Umudum Sensin API',
+      status: 'ok',
+      health: '/api/health',
+      liveSearch: '/api/live-search-jobs'
+    });
+  });
+
   // Single URL verification endpoint
   app.get('/api/verify-url', async (req: Request, res: Response) => {
     const targetUrl = req.query.url as string;
