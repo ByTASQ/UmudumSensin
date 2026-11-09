@@ -190,13 +190,15 @@ export async function checkSingleUrl(rawUrl: string): Promise<UrlCheckResult> {
       normBody.includes('basvuruya kapatilmistir') ||
       normBody.includes('bu pozisyon icin basvuru suresi dolmustur') ||
       normBody.includes('pozisyonun ihtiyaci karsilanmis') ||
-      normBody.includes('arama kriterlerinize uygun acik is ilani bulunamamistir') ||
-      normBody.includes('boyle bir ilan bulunamadi') ||
-      normBody.includes('aradiginiz ilan yayinda degildir') ||
-      normBody.includes('aradiginiz ilan bulunamadi') ||
-      normBody.includes('ilan bulunamadi') ||
-      normBody.includes('ilan pasif') ||
+      // Generic "ilan bulunamadı / sayfa bulunamadı" metinleri birçok aktif iş
+      // portalının HTML/JS/footer içeriğinde de bulunabiliyor. Bunları burada
+      // ölüm sinyali kabul etmiyoruz; gerçek 404/410 HTTP kodu aşağıda ayrıca
+      // kontrol ediliyor.
+      normBody.includes('ilan yayindan kaldirilmistir') ||
       normBody.includes('ilan kapatilmistir') ||
+      normBody.includes('basvuruya kapatilmistir') ||
+      normBody.includes('bu ilana artik basvuru yapilamamaktadir') ||
+      normBody.includes('bu pozisyon icin basvuru suresi dolmustur') ||
       normBody.includes('yapilmaya calisilan istek reddedildi') ||
       normBody.includes('request rejected');
 
