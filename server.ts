@@ -702,6 +702,17 @@ app.use((req: Request, res: Response, next) => {
         }
       } catch {}
 
+      // Gerçek özel sektör ilanlarını birden fazla kaynaktan tamamla.
+      // Memurlar.net haberleri bu havuza hiçbir koşulda alınmaz.
+      const discoveredJobs = await searchLiveJobSources(profession, city);
+      jobs.push(...discoveredJobs);
+      const filteredSourceJobs = jobs.filter(job =>
+        job.sourceId !== 'memurlar_net' &&
+        job.sourceId !== 'memurlar'
+      );
+      jobs.length = 0;
+      jobs.push(...filteredSourceJobs);
+
       // Title or URL keyword match priority with Turkish locale support
       const pLower = profession.toLocaleLowerCase('tr-TR');
       jobs.sort((a, b) => {
