@@ -474,7 +474,95 @@ app.use((req: Request, res: Response, next) => {
         }
       }
 
-      // Also fetch live active public & İŞKUR postings (?Expire=false guarantees active application period)
+      // Kaynakların kendi HTML yapıları sık değiştiği için, doğrudan kaynak sayfası
+  // boş döndüğünde alan adı kısıtlı web aramasıyla gerçek ilan bağlantılarını bul.
+  // Haber kaynaklarını özellikle dışarıda bırakıyoruz.
+  const searchLiveJobSources = async (query: string, cityName: string): Promise<any[]> => {
+    const domains = [
+      { domain: 'kariyer.net', sourceId: 'kariyernet', sourceName: 'Kariyer.net' },
+      { domain: 'eleman.net', sourceId: 'elemannet', sourceName: 'Eleman.net' },
+      { domain: 'yenibiris.com', sourceId: 'yenibiris', sourceName: 'Yenibiriş' },
+      { domain: 'isinolsun.com', sourceId: 'isinolsun', sourceName: 'İşin Olsun' },
+      { domain: 'secretcv.com', sourceId: 'secretcv', sourceName: 'Secretcv' },
+      { domain: 'jooble.org', sourceId: 'jooble', sourceName: 'Jooble' }
+    ];
+
+    const results: any[] = [];
+    const seen = new Set<string>();
+    const normCityName = cityName.toLocaleLowerCase('tr-TR').trim();
+
+    for (const source of domains) {
+      if (results.length >= 24) break;
+      const q = `site:${source.domain} "${query.replace(/"/g, ' ')}" "${cityName.replace(/"/g, ' ')}" iş ilanı`;
+      const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}`;
+      try {
+        const r = await fetch(ddgUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/128.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml'
+          },
+          signal: AbortSignal.timeout(7000)
+        });
+        const html = await r.text();
+        const resultRegex = /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\\s\\S]*?)<\\/a>/gi;
+        let m: RegExpExecArray | null;
+        while ((m = resultRegex.exec(html)) !== null && results.length < 24) {
+          let url = m[1].replace(/&amp;/g, '&');
+          const title = m[2].replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/\\s+/g, ' ').trim();
+          try {
+            const parsed = new URL(url, 'https://html.duckduckgo.com');
+            const uddg = parsed.searchParams.get('uddg');
+            if (uddg) url = decodeURIComponent(uddg);
+          } catch {}
+          try {
+            const parsed = new URL(url);
+            const host = parsed.hostname.toLocaleLowerCase('tr-TR').replace(/^www\\./, '');
+            if (host !== source.domain && !host.endsWith('.' + source.domain)) continue;
+            if (url.includes('memurlar.net')) continue;
+            if (seen.has(url)) continue;
+            seen.add(url);
+
+            const lowerTitle = title.toLocaleLowerCase('tr-TR');
+            const cityOk = !normCityName ||
+              lowerTitle.includes(normCityName) ||
+              url.toLocaleLowerCase('tr-TR').includes(normCityName) ||
+              normCityName.includes('tüm') || normCityName.includes('tum');
+
+            if (!cityOk && source.domain !== 'jooble.org') continue;
+
+            results.push({
+              id: 'web-' + matchHash(url),
+              title: title.slice(0, 140),
+              company: source.sourceName,
+              city: cityName || 'Tüm İller',
+              isNationwide: !cityName,
+              sourceId: source.sourceId,
+              sourceName: source.sourceName,
+              sourceDomain: source.domain,
+              isPublicSector: false,
+              sourceBadgeColor: 'bg-indigo-700',
+              originalUrl: url,
+              referenceCode: 'WEB-' + matchHash(url),
+              publishDate: 'Güncel',
+              deadlineDate: 'İlan yayında',
+              requiredEducation: ['Lise (Ortaöğretim)', 'Önlisans', 'Lisans'],
+              allowedDepartments: [query, 'Fark Etmez'],
+              minAge: 18,
+              maxAge: 65,
+              quota: 1,
+              requiresKpss: false,
+              employmentType: 'Özel Sektör',
+              description: `${source.sourceName} üzerinde bulunan "${title}" iş ilanı.`,
+              additionalRequirements: ['Başvuru doğrudan ilan kaynağından yapılır']
+            });
+          } catch {}
+        }
+      } catch {}
+    }
+    return results;
+  };
+
+  // Also fetch live active public & İŞKUR postings (?Expire=false guarantees active application period)
       // Uses windows-1254 (Turkish charset) decoding so characters like ü, İ, ş, ç, ğ, ö, ı are perfectly preserved!
       try {
         let memHtml = '';
