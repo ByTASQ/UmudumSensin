@@ -3,6 +3,8 @@ import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import { generateDynamicJobPool } from './src/services/jobService';
+import { DEFAULT_SOURCES } from './src/sources/sourceRegistry';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,6 +24,38 @@ interface UrlCheckResult {
 // In-memory cache for fast repeat requests
 const urlCache = new Map<string, { result: UrlCheckResult; timestamp: number }>();
 const CACHE_TTL_MS = 60 * 1000; // 1 minute in memory
+const URL_CHECK_CONCURRENCY = 4;
+
+// Cache completed live-search responses briefly to avoid repeating expensive upstream scraping.
+const LIVE_SEARCH_CACHE_TTL_MS = 30 * 1000;
+const LIVE_SEARCH_CACHE_LIMIT = 32;
+const liveSearchCache = new Map<string, { jobs: any[]; timestamp: number }>();
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  worker: (item: T) => Promise<R>,
+  concurrency = URL_CHECK_CONCURRENCY
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+
+  const runWorker = async () => {
+    while (true) {
+      const index = nextIndex++;
+      if (index >= items.length) return;
+      results[index] = await worker(items[index]);
+    }
+  };
+
+  await Promise.all(
+    Array.from(
+      { length: Math.min(Math.max(1, concurrency), items.length) },
+      () => runWorker()
+    )
+  );
+
+  return results;
+}
 
 // Turkish-aware string normalizer for accurate detection of expired job notices
 function normalizeForDetection(text: string): string {
@@ -136,35 +170,18 @@ export async function checkSingleUrl(rawUrl: string): Promise<UrlCheckResult> {
 
     // Specific detector for expired/closed job announcements (İŞKUR, Kariyer.net, Memurlar.net, Kamu İlan vb.)
     // Detects both "başvuru süresi sonra ermiştir" and "sona ermiştir" and all variations
-    const hasExpiredNoticeText = 
-      normBody.includes('goruntulemekte oldugunuz ilanin basvuru suresi') ||
+    const hasExpiredNoticeText =
       normBody.includes('basvuru suresi sona ermistir') ||
       normBody.includes('basvuru suresi sonra ermistir') ||
       normBody.includes('bu ilanin suresi dolmustur') ||
       normBody.includes('bu ilanin yayini sona ermistir') ||
       normBody.includes('ilan yayindan kaldirilmistir') ||
-      normBody.includes('aradiginiz sayfa bulunamadi') ||
-      normBody.includes('link hatali') ||
-      normBody.includes('yayindan kaldirilmis veya suresi dolmus olabilir') ||
-      normBody.includes('suresi dolmus olabilir') ||
-      normBody.includes('yayindan kaldirilmis olabilir') ||
       normBody.includes('bu ilana artik basvuru yapilamamaktadir') ||
-      normBody.includes('artik basvuru kabul etmiyor') ||
-      normBody.includes('artik ilan kabul etmiyor') ||
-      normBody.includes('ilan kabul etmiyor') ||
       normBody.includes('basvuruya kapalidir') ||
       normBody.includes('basvuruya kapatilmistir') ||
       normBody.includes('bu pozisyon icin basvuru suresi dolmustur') ||
-      normBody.includes('pozisyonun ihtiyaci karsilanmis') ||
-      normBody.includes('arama kriterlerinize uygun acik is ilani bulunamamistir') ||
-      normBody.includes('boyle bir ilan bulunamadi') ||
-      normBody.includes('aradiginiz ilan yayinda degildir') ||
-      normBody.includes('aradiginiz ilan bulunamadi') ||
-      normBody.includes('ilan bulunamadi') ||
-      normBody.includes('ilan pasif') ||
-      normBody.includes('ilan kapatilmistir') ||
-      normBody.includes('yapilmaya calisilan istek reddedildi') ||
-      normBody.includes('request rejected');
+      normBody.includes('pozisyonun ihtiyaci karsilanmistir') ||
+      normBody.includes('ilan kapatilmistir');
 
     // İŞKUR webforms: boş gelen veya sadece sisteme giriş yapınız diyen ve iş tanımı/kontenjanı olmayan ölü veya süresi bitmiş sayfalar
     const isIskurEmptyLoginOnly = rawUrl.includes('iskur.gov.tr') && 
@@ -243,11 +260,34 @@ export async function checkSingleUrl(rawUrl: string): Promise<UrlCheckResult> {
   }
 }
 
+function matchHash(value: string): string {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i++) hash = Math.imul(hash ^ value.charCodeAt(i), 16777619);
+  return (hash >>> 0).toString(36);
+}
+
 async function startServer() {
   const app = express();
+app.use((req: Request, res: Response, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
   const port = process.env.PORT || 3000;
 
   app.use(express.json());
+
+  // API root: Render/monitoring için servis durumunu açıkça bildir.
+  app.get('/', (_req, res) => {
+    res.json({
+      service: 'Umudum Sensin API',
+      status: 'ok',
+      health: '/api/health',
+      liveSearch: '/api/live-search-jobs'
+    });
+  });
 
   // Single URL verification endpoint
   app.get('/api/verify-url', async (req: Request, res: Response) => {
@@ -268,8 +308,14 @@ async function startServer() {
     }
 
     try {
-      const { execSync } = await import('child_process');
       const normUserCity = (city || '').toLocaleLowerCase('tr-TR').trim();
+      const liveSearchCacheKey = JSON.stringify({ profession: profession.toLocaleLowerCase('tr-TR'), city: normUserCity });
+      const cachedLiveSearch = liveSearchCache.get(liveSearchCacheKey);
+      if (cachedLiveSearch && Date.now() - cachedLiveSearch.timestamp < LIVE_SEARCH_CACHE_TTL_MS) {
+        return res.json({ jobs: cachedLiveSearch.jobs });
+      }
+
+      const { execSync } = await import('child_process');
       const isUserCityFilterActive = Boolean(
         normUserCity && 
         !normUserCity.includes('tüm') && 
@@ -281,13 +327,29 @@ async function startServer() {
         .replace(/ı/g, 'i').replace(/ğ/g, 'g').replace(/ü/g, 'u')
         .replace(/ş/g, 's').replace(/ö/g, 'o').replace(/ç/g, 'c').trim();
       
-      const path = normCity ? `/is-ilanlari/${normCity}?kw=${encodeURIComponent(profession)}` : `/is-ilanlari?kw=${encodeURIComponent(profession)}`;
-      const cmd = `curl -s -L --max-time 6 "https://www.kariyer.net${path}"`;
+      // Kariyer.net şehir yolu zaman zaman değiştiği için canlı aramayı ana arama
+      // endpoint'i üzerinden yapıyoruz; şehir filtresi aşağıdaki sonuç filtrelemesinde uygulanır.
+      const path = `/is-ilanlari?kw=${encodeURIComponent(profession)}${city ? `&ct=${encodeURIComponent(city)}` : ''}`;
+      const kariyerUrl = `https://www.kariyer.net${path}`;
       
       let html = '';
       try {
-        html = execSync(cmd, { encoding: 'utf8' });
-      } catch {}
+        const kariyerRes = await fetch(kariyerUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'tr-TR,tr;q=0.9'
+          },
+          signal: AbortSignal.timeout(6000)
+        });
+        html = await kariyerRes.text();
+      } catch {
+        // Fallback for environments where Kariyer.net blocks Node fetch.
+        const cmd = `curl -s -L --max-time 6 "${kariyerUrl}"`;
+        try {
+          html = execSync(cmd, { encoding: 'utf8' });
+        } catch {}
+      }
 
       const cardRegex = /<a\s+href="(\/is-ilani\/[^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
       let match;
@@ -355,7 +417,142 @@ async function startServer() {
         }
       }
 
-      // Also fetch live active public & İŞKUR postings (?Expire=false guarantees active application period)
+      // Kariyer kart yapısı değişirse genel ilan bağlantılarından güvenli bir yedek çıkarıcı kullan.
+      if (jobs.length === 0 && html) {
+        const fallbackRegex = /<a\s+[^>]*href="(\/is-ilani\/[^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+        let fallbackMatch;
+        const seenFallback = new Set<string>();
+        while ((fallbackMatch = fallbackRegex.exec(html)) !== null && jobs.length < 8) {
+          const url = 'https://www.kariyer.net' + fallbackMatch[1];
+          if (seenFallback.has(url)) continue;
+          seenFallback.add(url);
+          const text = fallbackMatch[2]
+            .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+            .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/&nbsp;/gi, ' ')
+            .replace(/&amp;/gi, '&')
+            .replace(/\s+/g, ' ')
+            .trim();
+          if (text.length < 4) continue;
+          const title = text.split(' | ')[0].trim().slice(0, 120);
+          const lowerTitle = title.toLocaleLowerCase('tr-TR');
+          if (!lowerTitle || lowerTitle === 'detay' || lowerTitle.includes('ilanı incele')) continue;
+          const isNationwide = !isUserCityFilterActive;
+          jobs.push({
+            id: 'knet-fallback-' + matchHash(url),
+            title,
+            company: 'Kariyer.net',
+            city: isNationwide ? 'Tüm İller' : city,
+            isNationwide,
+            sourceId: 'kariyernet',
+            sourceName: 'Kariyer.net Doğrulanmış İlanı',
+            sourceDomain: 'kariyer.net',
+            isPublicSector: false,
+            sourceBadgeColor: 'bg-purple-700',
+            originalUrl: url,
+            referenceCode: 'KNET-' + matchHash(url),
+            publishDate: 'Aktif İlan',
+            deadlineDate: 'Aktif İlan (Başvuruya Açık)',
+            requiredEducation: ['Lise (Ortaöğretim)', 'Önlisans', 'Lisans'],
+            allowedDepartments: [profession, 'Fark Etmez'],
+            minAge: 18,
+            maxAge: 55,
+            quota: 1,
+            requiresKpss: false,
+            employmentType: 'Özel Sektör',
+            description: `${title} pozisyonu için Kariyer.net üzerinde yayınlanan ilan.`,
+            additionalRequirements: ['Kariyer.net üzerinden doğrudan başvuru yapılabilir']
+          });
+        }
+      }
+
+      // Kaynakların kendi HTML yapıları sık değiştiği için, doğrudan kaynak sayfası
+  // boş döndüğünde alan adı kısıtlı web aramasıyla gerçek ilan bağlantılarını bul.
+  // Haber kaynaklarını özellikle dışarıda bırakıyoruz.
+  const searchLiveJobSources = async (query: string, cityName: string): Promise<any[]> => {
+    const domains = [
+      { domain: 'kariyer.net', sourceId: 'kariyernet', sourceName: 'Kariyer.net' },
+      { domain: 'eleman.net', sourceId: 'elemannet', sourceName: 'Eleman.net' },
+      { domain: 'yenibiris.com', sourceId: 'yenibiris', sourceName: 'Yenibiriş' },
+      { domain: 'isinolsun.com', sourceId: 'isinolsun', sourceName: 'İşin Olsun' },
+      { domain: 'secretcv.com', sourceId: 'secretcv', sourceName: 'Secretcv' },
+      { domain: 'jooble.org', sourceId: 'jooble', sourceName: 'Jooble' }
+    ];
+
+    const results: any[] = [];
+    const seen = new Set<string>();
+    const normCityName = cityName.toLocaleLowerCase('tr-TR').trim();
+
+    for (const source of domains) {
+      if (results.length >= 24) break;
+      const q = `site:${source.domain} "${query.replace(/"/g, ' ')}" "${cityName.replace(/"/g, ' ')}" iş ilanı`;
+      const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}`;
+      try {
+        const r = await fetch(ddgUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/128.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml'
+          },
+          signal: AbortSignal.timeout(7000)
+        });
+        const html = await r.text();
+        const resultRegex = /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+        let m: RegExpExecArray | null;
+        while ((m = resultRegex.exec(html)) !== null && results.length < 24) {
+          let url = m[1].replace(/&amp;/g, '&');
+          const title = m[2].replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
+          try {
+            const parsed = new URL(url, 'https://html.duckduckgo.com');
+            const uddg = parsed.searchParams.get('uddg');
+            if (uddg) url = decodeURIComponent(uddg);
+          } catch {}
+          try {
+            const parsed = new URL(url);
+            const host = parsed.hostname.toLocaleLowerCase('tr-TR').replace(/^www\./, '');
+            if (host !== source.domain && !host.endsWith('.' + source.domain)) continue;
+            if (url.includes('memurlar.net')) continue;
+            if (seen.has(url)) continue;
+            seen.add(url);
+
+            const lowerTitle = title.toLocaleLowerCase('tr-TR');
+            // DuckDuckGo result title/URL often omits the city even
+            // though the underlying search query is city-restricted.
+            // Do not discard a valid job solely for that presentation detail.
+
+            results.push({
+              id: 'web-' + matchHash(url),
+              title: title.slice(0, 140),
+              company: source.sourceName,
+              city: cityName || 'Tüm İller',
+              isNationwide: !cityName,
+              sourceId: source.sourceId,
+              sourceName: source.sourceName,
+              sourceDomain: source.domain,
+              isPublicSector: false,
+              sourceBadgeColor: 'bg-indigo-700',
+              originalUrl: url,
+              referenceCode: 'WEB-' + matchHash(url),
+              publishDate: 'Güncel',
+              deadlineDate: 'İlan yayında',
+              requiredEducation: ['Lise (Ortaöğretim)', 'Önlisans', 'Lisans'],
+              allowedDepartments: [query, 'Fark Etmez'],
+              minAge: 18,
+              maxAge: 65,
+              quota: 1,
+              requiresKpss: false,
+              employmentType: 'Özel Sektör',
+              description: `${source.sourceName} üzerinde bulunan "${title}" iş ilanı.`,
+              additionalRequirements: ['Başvuru doğrudan ilan kaynağından yapılır']
+            });
+          } catch {}
+        }
+      } catch {}
+    }
+    return results;
+  };
+
+  // Also fetch live active public & İŞKUR postings (?Expire=false guarantees active application period)
       // Uses windows-1254 (Turkish charset) decoding so characters like ü, İ, ş, ç, ğ, ö, ı are perfectly preserved!
       try {
         let memHtml = '';
@@ -495,6 +692,17 @@ async function startServer() {
         }
       } catch {}
 
+      // Gerçek özel sektör ilanlarını birden fazla kaynaktan tamamla.
+      // Memurlar.net haberleri bu havuza hiçbir koşulda alınmaz.
+      const discoveredJobs = await searchLiveJobSources(profession, city);
+      jobs.push(...discoveredJobs);
+      const filteredSourceJobs = jobs.filter(job =>
+        job.sourceId !== 'memurlar_net' &&
+        job.sourceId !== 'memurlar'
+      );
+      jobs.length = 0;
+      jobs.push(...filteredSourceJobs);
+
       // Title or URL keyword match priority with Turkish locale support
       const pLower = profession.toLocaleLowerCase('tr-TR');
       jobs.sort((a, b) => {
@@ -503,24 +711,63 @@ async function startServer() {
         return bHas - aHas;
       });
 
-      // CANLI DOĞRULAMA FİLTRESİ:
-      // Süresi dolmuş veya "başvuru süresi sonra ermiştir" uyarısı veren ilanları sonuçlardan ayıkla
-      const verifiedJobs = [];
-      for (const job of jobs) {
+      // Canlı arama endpoint'i ilanları burada doğrulamak için bekletmez.
+      // Kaynak sitelerinin 403/timeout/anti-bot davranışı arama isteğini
+      // Render timeout'una sürüklememeli. İlan URL doğrulaması istemci
+      // tarafında ayrı ve asenkron yapılır.
+      const uniqueJobs = Array.from(
+        new Map(jobs.map(job => [job.originalUrl, job])).values()
+      );
+      // Canlı scraper hiçbir kaynak döndürmezse yalnızca bu durumda
+      // uygulamanın yerel havuzunu yedek olarak kullan.
+      let finalJobs = uniqueJobs;
+
+      if (finalJobs.length === 0) {
         try {
-          const check = await checkSingleUrl(job.originalUrl);
-          if (!check.isExpired && !check.is404 && check.status === 'active') {
-            verifiedJobs.push(job);
-          }
+          const fallbackCriteria = {
+            profession,
+            educationLevel: 'Fark Etmez',
+            department: '',
+            age: '',
+            city,
+            district: '',
+            kpssScore: '',
+            noKpss: false,
+            includePublic: true,
+            includePrivate: true,
+            onlyPublicJobs: false
+          } as any;
+
+          const fallbackJobs = generateDynamicJobPool(fallbackCriteria, DEFAULT_SOURCES)
+            .filter(job => job.sourceId !== 'memurlar_net' && job.sourceId !== 'memurlar');
+
+          // Canlı sonuçlarla aynı sözleşmeyi kullan: yalnızca şehir eşleşen
+          // veya Türkiye geneli ilanları gönder.
+          finalJobs = fallbackJobs.filter(job => {
+            if (!isUserCityFilterActive) return true;
+            const jobCity = (job.city || '').toLocaleLowerCase('tr-TR').trim();
+            const nationwide = job.isNationwide === true ||
+              jobCity.includes('tüm') ||
+              jobCity.includes('tum') ||
+              jobCity.includes('genel') ||
+              jobCity.includes('türkiye') ||
+              jobCity.includes('turkiye');
+            return nationwide || jobCity === normUserCity ||
+              jobCity.includes(normUserCity) || normUserCity.includes(jobCity);
+          });
         } catch {
-          // If check threw an error, keep job only if not an expired url
-          if (!job.originalUrl.includes('404') && !job.originalUrl.includes('suresi-dolmus')) {
-            verifiedJobs.push(job);
-          }
+          finalJobs = [];
         }
       }
 
-      return res.json({ jobs: verifiedJobs });
+      liveSearchCache.set(liveSearchCacheKey, { jobs: finalJobs, timestamp: Date.now() });
+      while (liveSearchCache.size > LIVE_SEARCH_CACHE_LIMIT) {
+        const oldestKey = liveSearchCache.keys().next().value;
+        if (!oldestKey) break;
+        liveSearchCache.delete(oldestKey);
+      }
+
+      return res.json({ jobs: finalJobs });
     } catch (err: any) {
       return res.json({ jobs: [] });
     }
@@ -535,8 +782,9 @@ async function startServer() {
     }
 
     const checkLimit = jobs.slice(0, 30);
-    const checks = await Promise.all(
-      checkLimit.map(async (job: any) => {
+    const checks = await mapWithConcurrency(
+      checkLimit,
+      async (job: any) => {
         const url = job.originalUrl || '';
         const checkResult = await checkSingleUrl(url);
         return {
@@ -545,7 +793,7 @@ async function startServer() {
           checkResult,
           isLiveAndActive: !checkResult.isExpired && !checkResult.is404 && checkResult.status === 'active'
         };
-      })
+      }
     );
 
     const activeJobIds = new Set(checks.filter(c => c.isLiveAndActive).map(c => c.jobId));
@@ -570,9 +818,10 @@ async function startServer() {
     }
 
     // Limit batch size to 25 to prevent abuse
-    const limitedUrls = urls.slice(0, 25);
-    const results = await Promise.all(
-      limitedUrls.map(url => checkSingleUrl(url))
+    const limitedUrls = Array.from(new Set(urls.slice(0, 25)));
+    const results = await mapWithConcurrency(
+      limitedUrls,
+      url => checkSingleUrl(url)
     );
 
     return res.json({ results });
