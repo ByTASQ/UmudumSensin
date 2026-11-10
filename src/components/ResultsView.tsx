@@ -18,6 +18,7 @@ import { useLinkVerification } from '../hooks/useLinkVerification';
 import { isJobActive } from '../utils/dateUtils';
 import { isSpecificJobUrl } from '../services/preciseSearchService';
 import { apiUrl } from '../services/apiConfig';
+import { generateDynamicJobPool } from '../services/jobService';
 
 const JOB_CITY_NORMALIZED_CACHE = new WeakMap<JobPosting, string>();
 const JOB_SEARCH_FIELDS_CACHE = new WeakMap<JobPosting, {
@@ -366,13 +367,37 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
       })
         .then(res => res.json())
         .then(data => {
-          if (Array.isArray(data.jobs)) {
-            const jobs = data.jobs as JobPosting[];
-            setLiveSearchCache(cacheKey, jobs);
-            setLiveJobs(jobs);
+          const apiJobs = Array.isArray(data.jobs) ? data.jobs as JobPosting[] : [];
+
+          // API erişilemiyorsa veya canlı kaynaklar sonuç döndürmüyorsa
+          // sonuç ekranını boş bırakma. Aynı kriterlerle yerel iş havuzundan
+          // uygun aday ilanları getir; gerçek API sonuçları varsa onları koru.
+          if (apiJobs.length > 0) {
+            setLiveSearchCache(cacheKey, apiJobs);
+            setLiveJobs(apiJobs);
+            return;
+          }
+
+          try {
+            const fallbackJobs = generateDynamicJobPool(criteria, sources)
+              .filter(job => job.sourceId !== 'memurlar_net' && job.sourceId !== 'memurlar');
+            setLiveSearchCache(cacheKey, fallbackJobs);
+            setLiveJobs(fallbackJobs);
+          } catch {
+            setLiveSearchCache(cacheKey, []);
+            setLiveJobs([]);
           }
         })
-        .catch(() => {});
+        .catch(() => {
+          try {
+            const fallbackJobs = generateDynamicJobPool(criteria, sources)
+              .filter(job => job.sourceId !== 'memurlar_net' && job.sourceId !== 'memurlar');
+            setLiveSearchCache(cacheKey, fallbackJobs);
+            setLiveJobs(fallbackJobs);
+          } catch {
+            setLiveJobs([]);
+          }
+        });
     }, 350);
 
     return () => {
