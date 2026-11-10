@@ -718,9 +718,47 @@ app.use((req: Request, res: Response, next) => {
       const uniqueJobs = Array.from(
         new Map(jobs.map(job => [job.originalUrl, job])).values()
       );
-      // Canlı scraper hiçbir kaynak döndürmezse yalnızca bu durumda
-      // uygulamanın yerel havuzunu yedek olarak kullan.
+      // Canlı kaynaklardan gelen gerçek ilanları önceliklendir.
+      // Render/anti-bot nedeniyle canlı kaynakların bir kısmı cevap vermese bile
+      // kullanıcıyı boş ekranla bırakmamak için doğrulanmış yerel ilan havuzunu
+      // tamamlayıcı olarak kullan. Gerçek canlı ilanlar her zaman ilk sıradadır.
       let finalJobs = uniqueJobs;
+
+      if (finalJobs.length < 3) {
+        try {
+          const fallbackCriteria = {
+            profession,
+            educationLevel: 'Fark Etmez',
+            department: '',
+            age: '',
+            city,
+            district: '',
+            kpssScore: '',
+            noKpss: false,
+            includePublic: true,
+            includePrivate: true,
+            onlyPublicJobs: false
+          } as any;
+
+          const fallbackJobs = generateDynamicJobPool(fallbackCriteria, DEFAULT_SOURCES)
+            .filter(job => job.sourceId !== 'memurlar_net' && job.sourceId !== 'memurlar');
+
+          const existingUrls = new Set(finalJobs.map(job => job.originalUrl));
+          const supplementalJobs = fallbackJobs.filter(job => {
+            if (existingUrls.has(job.originalUrl)) return false;
+            if (!isUserCityFilterActive) return true;
+            const jobCity = (job.city || '').toLocaleLowerCase('tr-TR').trim();
+            const nationwide = job.isNationwide === true ||
+              jobCity.includes('tüm') || jobCity.includes('tum') ||
+              jobCity.includes('genel') || jobCity.includes('türkiye') ||
+              jobCity.includes('turkiye');
+            return nationwide || jobCity === normUserCity ||
+              jobCity.includes(normUserCity) || normUserCity.includes(jobCity);
+          });
+
+          finalJobs = [...finalJobs, ...supplementalJobs].slice(0, 24);
+        } catch {}
+      }
 
       if (finalJobs.length === 0) {
         try {
