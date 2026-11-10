@@ -398,11 +398,16 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
   const { getJobStatus, verificationVersion } = useLinkVerification(allInitialJobs);
 
   // Bir ilanın linkinin 404/kırık veya başvuru süresi dolmuş/yayından kaldırılmış olup olmadığını denetle
+  const liveJobSet = useMemo(() => new WeakSet(liveJobs), [liveJobs]);
+
   const isJobLinkBroken = (job: JobPosting): boolean => {
+    // Live-search sonuçları zaten güncel kaynak aramasından geliyor.
+    // Portalın bot koruması, Cloudflare veya Render tarafındaki geçici erişim
+    // problemi bu ilanı sonuç listesinden sessizce silmemeli.
+    // Yalnızca başlangıçta gelen statik havuz için kesin 404/410 filtrelemesi uygula.
+    if (liveJobSet.has(job)) return false;
+
     const status = getJobStatus(job);
-    // "not_found"/"expired" alone is not sufficient: job portals can return
-    // bot-block/soft-error pages with HTTP 200. Only a confirmed HTTP 404/410
-    // is allowed to remove a live-search result from the result list.
     return status?.is404 === true ||
       status?.httpStatus === 404 ||
       status?.httpStatus === 410;
