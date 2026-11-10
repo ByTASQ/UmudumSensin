@@ -411,12 +411,26 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
     [liveJobs, criteria]
   );
 
-  // Merge live jobs with initial pool
+  // Merge live jobs with initial pool. İlk render'da canlı API henüz cevap
+  // vermemiş olsa bile sonuç ekranını boş bırakma: aynı kriterlerle yerel
+  // doğrulanmış/üretilmiş ilan havuzunu doğrudan devreye al.
   const allMergedResults = useMemo(() => {
-    const existingUrls = new Set(results.map(r => r.job.originalUrl));
+    let sourceResults = results;
+
+    if (sourceResults.length === 0 && liveResults.length === 0 && criteria.profession) {
+      try {
+        const fallbackJobs = generateDynamicJobPool(criteria, sources)
+          .filter(job => job.sourceId !== 'memurlar_net' && job.sourceId !== 'memurlar');
+        sourceResults = fallbackJobs.map(job => evaluateJobMatch(job, criteria));
+      } catch {
+        sourceResults = [];
+      }
+    }
+
+    const existingUrls = new Set(sourceResults.map(r => r.job.originalUrl));
     const newItems = liveResults.filter(lr => !existingUrls.has(lr.job.originalUrl));
-    return [...newItems, ...results];
-  }, [results, liveResults]);
+    return [...newItems, ...sourceResults];
+  }, [results, liveResults, criteria, sources]);
 
   // Extract jobs for status handling on cards
   const allInitialJobs = useMemo(() => allMergedResults.map(r => r.job), [allMergedResults]);
